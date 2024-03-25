@@ -40,4 +40,3 @@ dependencies:
       - threadpoolctl==3.4.0
       - typing-extensions==4.10.0
       - urllib3==2.2.1
-prefix: /home/pufferfish/anaconda3/envs/finetune
