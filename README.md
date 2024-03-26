@@ -20,22 +20,18 @@ To get started with this project, follow these steps:
 3. **Activate the Environment:**
     ```bash
    conda activate finetune
-
 4. **Create Conda Environment:**
     ```bash
    conda env create -f environment.yml
-
 ## Run Fine-Tuning TabPFN
 
 1. **Make sure to be in the root directory & activate conda environment**
     ```bash
    cd FineTune-TabPFN
    conda activate finetune 
-
 2. **Run main.py:**
     ```bash
    python main.py
-
 ## Reproduce Evaluation 
 
 1. **Requirements**
