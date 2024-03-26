@@ -1,0 +1,14 @@
+# Ignore Visual Studio Code settings
+.vscode/
+
+# Ignore Python bytecode files
+__pycache__/
+
+# Ignore specific VS Code launch configuration
+*.code-workspace
+
+# Ignore .pkl files
+*.pkl
+
+# Ignore .csv files
+*.csv
