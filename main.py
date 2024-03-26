@@ -9,105 +9,103 @@ from tabpfn import TabPFNClassifier
 from torch import nn
 from data.DataManager import DataManager
 from torch.optim import Adam
+from gym.Trainer import Trainer
+from evaluation.model_evaluation import evaluate_accuracy
 
-# Step 1: Load your data
+# Step 0: Define hyperparameters
+n_seeds = [0, 1, 2, 3, 4, 5]
+k_folds = 5
+test_size = 0.0
+val_size = 0.5
 
-data_manager = DataManager("data/dataset/Titanic.csv", "survived")
-data_k_folded = data_manager.k_fold_train_test_split(
-    k_folds=5,
-    test_size=0.33,
-    val_size=0.33,
-    random_state=42,
+sequence_length = 150
+min_single_eval_pos = 100
+epochs = 10
+learning_rate = 0.00001
+
+num_workers = 0
+
+# Step 1: Load  data
+data_manager = DataManager(
+    dir_path="data/dataset",
+    dataset_name="Titanic.csv",
+    target_col="survived",
 )
 
-dataloader = CustomDataLoader(
-    "data/dataset/Titanic.csv",
-    "survived",
-    batch_size=16,
-    shuffle=True,
-    num_workers=1,
-)
+# Step 2: Define the model, criterion, optimizer, device and trainer
+criterion = nn.CrossEntropyLoss()
+optimizer = Adam
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+tabpfn_classifier = TabPFNClassifier()
+trainer = Trainer(tabpfn_classifier, learning_rate, criterion, optimizer, device)
 
 
-classifier = TabPFNClassifier(device="cpu", N_ensemble_configurations=32)
+results_dict = {}
 
-classifier.fit(X_train, y_train)
-y_eval, p_eval = classifier.predict(X_test, return_winning_probability=True)
+# Step 3: run the evaluation and training loop
+for random_state in n_seeds:
+    results_dict[random_state] = {}
 
-print("Accuracy", accuracy_score(y_test, y_eval))
+    torch.manual_seed(random_state)  # Set seed for torch RNG
+    torch.cuda.manual_seed(random_state)  # Set seed for CUDA RNG
+    torch.cuda.manual_seed_all(random_state)  # Set seed for all CUDA devices
+    torch.backends.cudnn.deterministic = True  # Ensure deterministic behavior for cudnn
+    # Disable cudnn benchmark for reproducibility
+    torch.backends.cudnn.benchmark = False
 
+    data_k_folded = data_manager.k_fold_train_test_split(
+        k_folds=k_folds,
+        test_size=test_size,
+        val_size=val_size,
+        random_state=random_state,
+    )
 
-tabpfn_model = classifier.model[2]
+    for fold_i, fold in enumerate(data_k_folded):
+        results_dict[random_state][fold_i] = {}
 
+        train_data_loader = CustomDataLoader(
+            fold["train"],
+            sequence_length=sequence_length,
+            min_single_eval_pos=min_single_eval_pos,
+            shuffle=True,
+            num_workers=num_workers,
+        )
 
-# Step 4: Set up your optimizer and loss function
-optimizer = Adam(tabpfn_model.parameters(), lr=0.01)  # Define your optimizer
-criterion = nn.CrossEntropyLoss()  # Define your loss function
+        test_data_loader = CustomDataLoader(
+            fold["test"],
+            sequence_length=sequence_length,
+            min_single_eval_pos=min_single_eval_pos,
+            shuffle=True,
+            num_workers=num_workers,
+        )
 
+        val_data_loader = CustomDataLoader(
+            fold["val"],
+            sequence_length=sequence_length,
+            min_single_eval_pos=min_single_eval_pos,
+            shuffle=True,
+            num_workers=num_workers,
+        )
 
-# Define the size of your dataset
+        # Pre-tuning evaluation
+        print(f"----- -----  PRE-TUNING EVALUATION ----- -----")
+        pre_eval = evaluate_accuracy(val_data_loader, tabpfn_classifier, device)
 
-num_features = 100
-num_classes = 10
+        # Fine-tune the model
+        tabpfn_classifier = trainer.fine_tune_model(
+            train_loader=train_data_loader,
+            val_loader=val_data_loader,
+            epochs=epochs,
+        )
+        # Post-tuning evaluation
+        print(f"----- -----  POST-TUNING EVALUATION ----- -----")
+        post_eval = evaluate_accuracy(val_data_loader, tabpfn_classifier, device)
 
-batch_size = 16
-sequence_length = 500
+        results_dict[random_state][fold_i] = {
+            "pre_eval": pre_eval,
+            "post_eval": post_eval,
+        }
 
-# Create random data with a standard Gaussian distribution for features
-x = torch.randn(batch_size, sequence_length, num_features)
-
-# Create random class labels
-y = torch.randint(num_classes, (batch_size, sequence_length)).float()
-
-
-# # Create an instance of your custom Dataset
-# dataset = CustomDataset(x, y)
-
-
-# # Create a DataLoader
-# train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-
-# # Step 5: Continue training the model
-# for _epoch in range(5):
-#     single_eval_pos = 400
-#     for _batch_idx, (data, target) in enumerate(train_loader):
-#         x_data = data.transpose(0, 1)
-#         y_train = target[:single_eval_pos].transpose(0, 1)
-#         y_test = target[:, single_eval_pos:]
-
-#         optimizer.zero_grad()
-
-#         output = tabpfn_model((x_data, y_train), single_eval_pos=single_eval_pos)
-#         output = output.reshape(-1, 10)
-
-#         y_test = y_test.long().flatten()
-
-#         loss = criterion(output, y_test)
-
-#         loss.backward()
-#         optimizer.step()
-
-
-# classifier.model = (0, 0, tabpfn_model)  # not sure if this is necessary:
-
-
-# X, y = load_breast_cancer(return_X_y=True)
-# X_train, X_test, y_train, y_test = train_test_split(
-#     X, y, test_size=0.33, random_state=42
-# )
-
-# classifier.fit(X_train, y_train)
-# y_eval, p_eval = classifier.predict(X_test, return_winning_probability=True)
-
-# print("Accuracy", accuracy_score(y_test, y_eval))
-
-
-# # # Optionally, you might want to save checkpoints periodically
-# # if epoch % 10 == 0:  # Save checkpoint every 10 epochs
-# #     torch.save({
-# #         "epoch": epoch,
-# #         "model_state_dict": model.state_dict(),
-# #         "optimizer_state_dict": optimizer.state_dict(),
-# #         "loss": loss,
-# #         # Add other relevant information you might want to save
-# #     }, f"checkpoint_epoch_{epoch}.ckpt")
+# store the results
+data_manager.store_results(results_dict)
