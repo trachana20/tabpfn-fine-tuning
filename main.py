@@ -11,6 +11,7 @@ from data.DataManager import DataManager
 from torch.optim import Adam
 from gym.Trainer import Trainer
 from evaluation.model_evaluation import evaluate_accuracy
+import pandas as pd
 
 # Step 0: Define hyperparameters
 n_seeds = [0, 1, 2, 3, 4, 5]
@@ -21,7 +22,8 @@ val_size = 0.5
 sequence_length = 150
 min_single_eval_pos = 100
 epochs = 10
-learning_rate = 0.00001
+# learning_rate = 0.00001
+learning_rate = 0.01
 
 num_workers = 0
 
@@ -41,12 +43,10 @@ tabpfn_classifier = TabPFNClassifier()
 trainer = Trainer(tabpfn_classifier, learning_rate, criterion, optimizer, device)
 
 
-results_dict = {}
+results_df = pd.DataFrame(columns=["random_state", "fold", "pre_eval", "post_eval"])
 
 # Step 3: run the evaluation and training loop
 for random_state in n_seeds:
-    results_dict[random_state] = {}
-
     torch.manual_seed(random_state)  # Set seed for torch RNG
     torch.cuda.manual_seed(random_state)  # Set seed for CUDA RNG
     torch.cuda.manual_seed_all(random_state)  # Set seed for all CUDA devices
@@ -62,8 +62,6 @@ for random_state in n_seeds:
     )
 
     for fold_i, fold in enumerate(data_k_folded):
-        results_dict[random_state][fold_i] = {}
-
         train_data_loader = CustomDataLoader(
             fold["train"],
             sequence_length=sequence_length,
@@ -90,7 +88,7 @@ for random_state in n_seeds:
 
         # Pre-tuning evaluation
         print(f"----- -----  PRE-TUNING EVALUATION ----- -----")
-        pre_eval = evaluate_accuracy(val_data_loader, tabpfn_classifier, device)
+        pre_eval_metrics = evaluate_accuracy(val_data_loader, tabpfn_classifier, device)
 
         # Fine-tune the model
         tabpfn_classifier = trainer.fine_tune_model(
@@ -100,12 +98,24 @@ for random_state in n_seeds:
         )
         # Post-tuning evaluation
         print(f"----- -----  POST-TUNING EVALUATION ----- -----")
-        post_eval = evaluate_accuracy(val_data_loader, tabpfn_classifier, device)
+        post_eval_metrics = evaluate_accuracy(
+            val_data_loader,
+            tabpfn_classifier,
+            device,
+        )
 
-        results_dict[random_state][fold_i] = {
-            "pre_eval": pre_eval,
-            "post_eval": post_eval,
-        }
+        new_rows_df = pd.DataFrame(
+            [
+                {
+                    "random_state": random_state,
+                    "fold": fold_i,
+                    "pre_eval": pre_eval_metrics["accuracy"],
+                    "post_eval": post_eval_metrics["accuracy"],
+                },
+            ],
+        )
+        results_df = pd.concat([results_df, new_rows_df], ignore_index=True)
+
 
 # store the results
-data_manager.store_results(results_dict)
+data_manager.store_results(results_df)

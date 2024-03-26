@@ -13,7 +13,7 @@ from data.CustomDataset import CustomDataset
 class DataManager:
     def __init__(self, dir_path, dataset_name, target_col):
         self.dataset_path = f"{dir_path}/{dataset_name}"
-        self.results_path = f"{dir_path}/results.pkl"
+        self.results_path = f"{dir_path}/fine_tune_results"
         self.dataset_name = dataset_name
         self.dir_path = dir_path
 
@@ -73,13 +73,13 @@ class DataManager:
 
         return datasets
 
-    def store_results(self, dict):
-        with open(self.results_path, "wb") as f:
-            pickle.dump(dict, f)
+    def store_results(self, data):
+        # Store DataFrame using pickle
+        data.to_pickle(f"{self.results_path}.pkl")
 
     def load_results(self):
+        file_path = f"{self.results_path}.pkl"
         # check if exists
-        if not Path(self.results_path).exists():
+        if not Path(file_path).exists():
             return None
-        with open(self.results_path, "rb") as f:
-            return pickle.load(f)
+        return pd.read_pickle(file_path)
