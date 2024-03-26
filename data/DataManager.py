@@ -4,6 +4,7 @@ import pickle
 from pathlib import Path
 
 import pandas as pd
+import openml
 from preprocessing.PreProcessor import PreProcessor
 from sklearn.model_selection import KFold, train_test_split
 
@@ -36,9 +37,19 @@ class DataManager:
             raise ValueError("File format not supported")
         return data
 
+    def _load_data_from_openml(self, tid: int = 168746):
+        oml_task = openml.tasks.get_task(
+            tid,
+            download_data=True,
+            download_qualities=False,
+        )
+        data, *_ = oml_task.get_dataset().get_data(dataset_format="dataframe")
+
+        return data
+
     def k_fold_train_test_split(self, k_folds, test_size, val_size, random_state):
         # Preprocess the data (Missing values, encoding, outliers, scaling,...)
-        data = self.preprocessor.preprocess(self.load_data(), self.target)
+        data = self.preprocessor.preprocess(self._load_data_from_openml(), self.target)
 
         # Initialize KFold
         kf = KFold(n_splits=k_folds, shuffle=True, random_state=random_state)

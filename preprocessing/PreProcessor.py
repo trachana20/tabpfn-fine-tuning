@@ -31,6 +31,7 @@ class PreProcessor:
         # Split data into features and target
         x_data = data.drop(columns=[target])
         target_data = data[target]
+        target_data = self.target_encoder(target_data)
 
         # Get categorical and numerical features
         categorical_features, numerical_features = (
@@ -60,8 +61,12 @@ class PreProcessor:
             x_data,
             numerical_features,
         )
-
+        target_data = pd.DataFrame({target: target_data})
         return pd.concat([x_data, target_data], axis=1)
+
+    def target_encoder(self, target):
+        encoder = LabelEncoder()
+        return encoder.fit_transform(target)
 
     def drop_row_where_taget_is_missing(self, data, target):
         return data.dropna(subset=[target])

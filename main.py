@@ -34,6 +34,7 @@ data_manager = DataManager(
     target_col="survived",
 )
 
+
 # Step 2: Define the model, criterion, optimizer, device and trainer
 criterion = nn.CrossEntropyLoss()
 optimizer = Adam
