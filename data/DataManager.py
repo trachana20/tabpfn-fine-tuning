@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 import openml
 from preprocessing.PreProcessor import PreProcessor
-from sklearn.model_selection import KFold, train_test_split
+from sklearn.model_selection import KFold, train_test_split, StratifiedKFold
 
 from data.CustomDataset import CustomDataset
 
@@ -51,14 +51,17 @@ class DataManager:
         # Preprocess the data (Missing values, encoding, outliers, scaling,...)
         data = self.preprocessor.preprocess(self._load_data_from_openml(), self.target)
 
-        # Initialize KFold
-        kf = KFold(n_splits=k_folds, shuffle=True, random_state=random_state)
+        # Initialize StratifiedKFold
+        kf = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=random_state)
 
         # List to store datasets
         datasets = []
 
-        # Iterate through KFold splits
-        for train_index, test_index in kf.split(data):
+        x_data = data.drop(columns=[self.target])
+        y_data = data[self.target]
+
+        # Iterate through StratifiedKFold splits
+        for train_index, test_index in kf.split(x_data, y_data):
             # Split data into train and test sets
             test_data = data.iloc[test_index]
             train_data = data.iloc[train_index]
