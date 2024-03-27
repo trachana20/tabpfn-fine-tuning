@@ -4,6 +4,8 @@ A project to fine tune a generically pretrained TabPFN (see: https://github.com/
 TabPFN demonstrates robust, rapid classification performance on diverse datasets. To improve performance on a particular dataset, we fine-tune a pretrained TabPFN model for optimal results on that specific task.
 ## Methodology 
 The Methodology involves utilizing dataset-specific prior knowledge to its fullest extent. This includes training on either heavily augmented real-world data or synthetically sampled priors that closely reflect the underlying structure of the data.
+## Data
+The data can be either a locally loadable dataset, which you specify the target column explicitly, or an OpenML dataset, specified by the id. 
 ## Results 
 TODO 
 # Getting Started & Installation  
