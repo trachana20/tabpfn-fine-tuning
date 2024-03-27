@@ -1,17 +1,14 @@
 from __future__ import annotations
 
+import pandas as pd
 import torch
 from data.CustomDataloader import CustomDataLoader
-from sklearn.datasets import load_breast_cancer
-from sklearn.metrics import accuracy_score
-from sklearn.model_selection import train_test_split
+from data.DataManager import DataManager
+from evaluation.model_evaluation import evaluate_accuracy
+from gym.Trainer import Trainer
 from tabpfn import TabPFNClassifier
 from torch import nn
-from data.DataManager import DataManager
 from torch.optim import Adam
-from gym.Trainer import Trainer
-from evaluation.model_evaluation import evaluate_accuracy
-import pandas as pd
 
 # Step 0: Define hyperparameters
 n_seeds = [0, 1, 2, 3, 4, 5]
@@ -87,7 +84,6 @@ for random_state in n_seeds:
         )
 
         # Pre-tuning evaluation
-        print(f"----- -----  PRE-TUNING EVALUATION ----- -----")
         pre_eval_metrics = evaluate_accuracy(val_data_loader, tabpfn_classifier, device)
 
         # Fine-tune the model
@@ -97,7 +93,6 @@ for random_state in n_seeds:
             epochs=epochs,
         )
         # Post-tuning evaluation
-        print(f"----- -----  POST-TUNING EVALUATION ----- -----")
         post_eval_metrics = evaluate_accuracy(
             val_data_loader,
             tabpfn_classifier,
