@@ -30,8 +30,7 @@ num_workers = 0
 # Step 1: Load  data
 data_manager = DataManager(
     dir_path="data/dataset",
-    dataset_name="Titanic.csv",
-    target_col="survived",
+    dataset_id=168746,
 )
 
 
