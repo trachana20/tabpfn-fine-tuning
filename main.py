@@ -13,6 +13,7 @@ from torch.optim import Adam
 # Step 0: Define hyperparameters
 n_seeds = [0, 1, 2, 3, 4, 5]
 k_folds = 5
+# val_size is percentage w.r.t. the total dataset-rows ]0,1[
 val_size = 0.25
 
 sequence_length = 150
