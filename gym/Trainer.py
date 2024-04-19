@@ -1,19 +1,32 @@
-from torch.nn import Module
-from data.CustomDataloader import CustomDataLoader
-from tabpfn import TabPFNClassifier
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+import numpy as np
 import torch
-import torch.nn as nn
+from sklearn.metrics import accuracy_score, roc_auc_score
+from torch import nn
+
+from collections import defaultdict
+import wandb
+
+if TYPE_CHECKING:
+    from data.CustomDataloader import CustomDataLoader
+    from tabpfn import TabPFNClassifier
 
 
 class Trainer:
     def __init__(
         self,
+        project_name: str,
         tabpfn_classifier: TabPFNClassifier,
         learning_rate: float,
         criterion,
         optimizer,
+        log_wandb,
         device,
     ):
+        self.project_name = project_name
         self.tabpfn_classifier = tabpfn_classifier
 
         self.learning_rate = learning_rate
@@ -22,6 +35,7 @@ class Trainer:
             self.tabpfn_classifier.model[2].parameters(),
             lr=self.learning_rate,
         )
+        self.log_wandb = log_wandb
         self.device = device
 
     def fine_tune_model(
@@ -30,14 +44,25 @@ class Trainer:
         val_loader: CustomDataLoader,
         epochs: int,
     ):
+        if self.log_wandb:
+            self._setup_wandb(
+                self.project_name,
+                {
+                    "learning_rate": self.learning_rate,
+                    "epochs": epochs,
+                    "dataset": train_loader.dataset.name,
+                },
+            )
         tabpfn_model = self.tabpfn_classifier.model[2]
         tabpfn_model.train()
-
         tabpfn_model.to(self.device)
-        tabpfn_model.train()
 
-        for _ in range(epochs):
-            for _, (x_train, y_train, x_query, y_query) in enumerate(
+        num_classes = train_loader.dataset.num_classes
+
+        for _epoch_i in range(epochs):
+            epoch_loss = 0.0  # initialize epoch loss
+            num_batches = len(train_loader)
+            for _batch_i, (x_train, y_train, x_query, y_query) in enumerate(
                 train_loader,
             ):
                 self.optimizer.zero_grad()
@@ -58,11 +83,106 @@ class Trainer:
                 #  -> sequence_length, batch_size=1
                 y_data = y_train.unsqueeze(1).to(self.device).float()
 
-                output = tabpfn_model((x_data, y_data), single_eval_pos=len(x_train))
+                y_preds = tabpfn_model(
+                    (x_data, y_data),
+                    single_eval_pos=len(x_train),
+                ).reshape(-1, 10)[:, :num_classes]
 
-                loss = self.criterion(output.reshape(-1, 10), y_query.long().flatten())
+                y_query = y_query.long().flatten()
+                loss = self.criterion(y_preds, y_query)
+
+                epoch_loss += loss.item()
 
                 loss.backward()
                 self.optimizer.step()
+
+                # Print batch progress
+            training_metrics = {"epoch_loss": epoch_loss / num_batches}
+            # Call validation function after each epoch
+            with torch.no_grad():
+                evaluation_metrics = self.model_validation(val_loader, tabpfn_model)
+
+            if self.log_wandb:
+                metrics = {**training_metrics, **evaluation_metrics}
+                # log metrics to wandb
+                wandb.log(metrics, step=_epoch_i)
+
         tabpfn_model.eval()
         return self.tabpfn_classifier
+
+    def model_validation(self, val_loader, tabpfn_model):
+        metrics = []
+
+        with torch.no_grad():
+            for batch_i, (
+                x_train_val,
+                y_train_val,
+                x_query_val,
+                y_query_val,
+            ) in enumerate(val_loader):
+                self.tabpfn_classifier.model = (None, None, tabpfn_model)
+
+                self.tabpfn_classifier.fit(x_train_val, y_train_val)
+                y_preds = self.tabpfn_classifier.predict_proba(x_query_val)
+
+                batch_metrics = self.compute_metrics(
+                    y_query_val,
+                    y_preds,
+                    val_loader.dataset.name,
+                )
+                metrics.append(batch_metrics)
+
+            # if needed aggregate over batches
+            if len(metrics):
+                metrics_temp = defaultdict(float)
+                for metric in metrics:
+                    for metric_key, metric_value in metric.items():
+                        metrics_temp[metric_key] += metric_value
+
+                metrics = dict(metrics_temp)
+        return metrics
+
+    def compute_metrics(self, y_true, y_preds_probs, dataset_name):
+        metrics = {}
+
+        y_preds_argmax = y_preds_probs.argmax(axis=-1)
+        y_true_shape = np.unique(y_true).shape[0]
+        prediction_shape = np.unique(y_preds_argmax).shape[0]
+
+        # Accuracy
+        accuracy = accuracy_score(y_true, y_preds_argmax)
+        metrics[f"{dataset_name}/accuracy"] = accuracy
+
+        is_binary = y_preds_probs.shape[-1] == 2
+
+        if y_true_shape == prediction_shape:
+            try:
+                if is_binary:
+                    auc = roc_auc_score(y_true, y_preds_argmax)
+                else:
+                    auc = roc_auc_score(
+                        y_true,
+                        y_preds_probs,
+                        multi_class="ovr",
+                        average="macro",
+                    )
+                metrics[f"{dataset_name}/auc"] = auc
+            except ValueError as e:
+                print(f"error: {e}")
+                print(f"y_preds unique classes: {y_preds_probs.shape[-1]}")
+                print(f"labels unique classes: {np.unique(y_true).shape[0]}")
+        return metrics
+
+    def _setup_wandb(
+        self,
+        project_name,
+        training_config,
+    ):
+        wandb.login()
+        # start a new wandb run to track this script
+        wandb.init(
+            # set the wandb project where this run will be logged
+            project=project_name,
+            # track hyperparameters and run metadata
+            config=training_config,
+        )

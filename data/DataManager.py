@@ -48,8 +48,8 @@ class DataManager:
         self.target = target_col
         self.dataset_id = dataset_id
 
-        if dataset_name is not None:
-            self.dataset_path = f"{dir_path}/{dataset_name}"
+        if self.dataset_name is not None:
+            self.dataset_path = f"{dir_path}/{self.dataset_name}"
 
         self.results_path = f"{dir_path}/fine_tune_results"
         self.preprocessor = PreProcessor()
@@ -65,17 +65,18 @@ class DataManager:
     # ----- ----- ----- ----- ----- load data from a local dataset or OpenML
     def load_data(self):
         if self._use_openml:
-            data, target = self._load_data_from_openml(self.dataset_id)
+            data_df, target_str, name = self._load_data_from_openml(self.dataset_id)
 
         else:
-            target = self.target
+            target_str = self.target
+            name = self.dataset_name
             if self.dataset_path.endswith(".csv"):
-                data = self._load_data_from_csv()
+                data_df = self._load_data_from_csv()
             elif self.dataset_path.endswith(".pkl"):
-                data = self._load_data_from_pickle()
+                data_df = self._load_data_from_pickle()
             else:
                 raise ValueError("File format not supported")
-        return data, target
+        return data_df, target_str, name
 
     # ----- ----- ----- ----- ----- load data from openml
     def _load_data_from_openml(self, tid: int = 168746):
@@ -84,14 +85,16 @@ class DataManager:
             download_data=True,
             download_qualities=False,
         )
-        data, *_ = oml_task.get_dataset().get_data(dataset_format="dataframe")
+        dataset = oml_task.get_dataset()
+        name = dataset.name
+        data_df, *_ = dataset.get_data(dataset_format="dataframe")
         target = oml_task.target_name
-        return data, target
+        return data_df, target, name
 
     # ----- ----- ----- ----- ----- create k-fold splits (strategy: StratifiedKFold)
     def k_fold_train_test_split(self, k_folds, val_size, random_state):
         # Preprocess the data (Missing values, encoding, outliers, scaling,...)
-        data_df, target = self.load_data()
+        data_df, target, name = self.load_data()
         data = self.preprocessor.preprocess(data_df, target)
 
         # Initialize StratifiedKFold
@@ -123,9 +126,9 @@ class DataManager:
             # Create CustomDataset instances and append to datasets list
             datasets.append(
                 {
-                    "train": CustomDataset(train_data, target),
-                    "test": CustomDataset(test_data, target),
-                    "val": CustomDataset(val_data, target),
+                    "train": CustomDataset(train_data, target, name),
+                    "test": CustomDataset(test_data, target, name),
+                    "val": CustomDataset(val_data, target, name),
                 },
             )
 

@@ -1,0 +1,80 @@
+{
+    "os": "Linux-6.5.0-27-generic-x86_64-with-glibc2.35",
+    "python": "3.10.14",
+    "heartbeatAt": "2024-04-19T12:48:15.206393",
+    "startedAt": "2024-04-19T12:48:14.594524",
+    "docker": null,
+    "cuda": null,
+    "args": [],
+    "state": "running",
+    "program": "/home/pufferfish/Development/FineTune-TabPFN/main.py",
+    "codePathLocal": "main.py",
+    "codePath": "main.py",
+    "git": {
+        "remote": "https://github.com/PufferFishCode/FineTune-TabPFN.git",
+        "commit": "9091a4582a4a2d0ae5fdddf8452186f2b46e99d5"
+    },
+    "email": "111045718+PufferFishCode@users.noreply.github.com",
+    "root": "/home/pufferfish/Development/FineTune-TabPFN",
+    "host": "clownFish",
+    "username": "pufferfish",
+    "executable": "/home/pufferfish/anaconda3/envs/finetune/bin/python",
+    "cpu_count": 4,
+    "cpu_count_logical": 8,
+    "cpu_freq": {
+        "current": 3706.5527500000003,
+        "min": 400.0,
+        "max": 4000.0
+    },
+    "cpu_freq_per_core": [
+        {
+            "current": 3768.74,
+            "min": 400.0,
+            "max": 4000.0
+        },
+        {
+            "current": 3808.922,
+            "min": 400.0,
+            "max": 4000.0
+        },
+        {
+            "current": 3896.939,
+            "min": 400.0,
+            "max": 4000.0
+        },
+        {
+            "current": 3842.685,
+            "min": 400.0,
+            "max": 4000.0
+        },
+        {
+            "current": 3702.381,
+            "min": 400.0,
+            "max": 4000.0
+        },
+        {
+            "current": 3928.807,
+            "min": 400.0,
+            "max": 4000.0
+        },
+        {
+            "current": 3909.677,
+            "min": 400.0,
+            "max": 4000.0
+        },
+        {
+            "current": 3797.931,
+            "min": 400.0,
+            "max": 4000.0
+        }
+    ],
+    "disk": {
+        "/": {
+            "total": 467.8895797729492,
+            "used": 200.90657806396484
+        }
+    },
+    "memory": {
+        "total": 15.317268371582031
+    }
+}
