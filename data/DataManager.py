@@ -89,7 +89,7 @@ class DataManager:
         return data, target
 
     # ----- ----- ----- ----- ----- create k-fold splits (strategy: StratifiedKFold)
-    def k_fold_train_test_split(self, k_folds, test_size, val_size, random_state):
+    def k_fold_train_test_split(self, k_folds, val_size, random_state):
         # Preprocess the data (Missing values, encoding, outliers, scaling,...)
         data_df, target = self.load_data()
         data = self.preprocessor.preprocess(data_df, target)
@@ -110,12 +110,13 @@ class DataManager:
             train_data = data.iloc[train_index]
 
             # Split train data into train and validation sets
+            # Calculate the actual validation size based on the remaining data
+            # val size is given as a percentage to the total data and
+            # thus has to be scaled
+            val_split_size_normalized = val_size / (1 - len(test_index) / data.shape[0])
             train_data, val_data = train_test_split(
                 train_data,
-                # Calculate the actual validation size based on the remaining data
-                # val size is given as a percentage to the total data and
-                # thus has to be scaled
-                test_size=val_size / (1 - test_size),
+                test_size=val_split_size_normalized,
                 random_state=random_state,
             )
 

@@ -13,8 +13,7 @@ from torch.optim import Adam
 # Step 0: Define hyperparameters
 n_seeds = [0, 1, 2, 3, 4, 5]
 k_folds = 5
-test_size = 0.0
-val_size = 0.5
+val_size = 0.25
 
 sequence_length = 150
 min_single_eval_pos = 100
@@ -53,7 +52,6 @@ for random_state in n_seeds:
 
     data_k_folded = data_manager.k_fold_train_test_split(
         k_folds=k_folds,
-        test_size=test_size,
         val_size=val_size,
         random_state=random_state,
     )
