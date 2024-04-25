@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import pandas as pd
 import torch
 from data.CustomDataloader import CustomDataLoader
 from data.DataManager import DataManager
-from evaluation.model_evaluation import evaluate_accuracy
 from gym.Trainer import Trainer
-from logger.WandBLogger import WandBLogger
+from logger.Logger import Logger
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import DecisionTreeClassifier
 from tabpfn import TabPFNClassifier
@@ -15,35 +13,44 @@ from torch.optim import Adam
 
 # Step 0: Define hyperparameters which are valid for all models and model
 # specific hyperparameters
+
 setup_config = {
-    "n_seeds": [0, 1, 2, 3, 4, 5],
+    "n_seeds": [0, 1],
     "k_folds": 5,
     # val_size is percentage w.r.t. the total dataset-rows ]0,1[
     "val_size": 0.25,
     "num_workers": 0,
     "dataset_ids": [168746],  # , 23381]
-    "log_wandb": False,
-    "name": "Finetune-TabPFN",
+    "log_wandb": True,
+    "project_name": "Finetune-TabPFN",
     "models": [RandomForestClassifier, DecisionTreeClassifier, TabPFNClassifier],
     "device": "cuda" if torch.cuda.is_available() else "cpu",
 }
-
-modelkwargs_dict = {TabPFNClassifier: {"epochs": 10, "learning_rate": 1e-3}}
+# Create a lookup dictionary which contains the architectural and training
+# Hyperparameters of the models
 
 # Step 1: Define the model, criterion, optimizer, device and trainer
-criterion = nn.CrossEntropyLoss()
-optimizer = Adam
+modelkwargs_dict = {
+    TabPFNClassifier: {
+        "architecture": {},
+        "training": {
+            "epochs": 10,
+            "learning_rate": 1e-3,
+            "criterion": nn.CrossEntropyLoss,
+            "optimizer": Adam,
+        },
+    },
+}
 
 
-wandb_logger = None
-if setup_config["log_wandb"]:
-    wandb_logger = WandBLogger(name=setup_config["name"])
-    wandb_logger._setup_wandb(setup_config=setup_config)
-
-trainer = Trainer(
-    name=setup_config["name"],
-    logger=wandb_logger,
+logger = Logger(
+    project_name=setup_config["project_name"],
+    log_wandb=setup_config["log_wandb"],
+    results_path="results/",
 )
+logger.setup_wandb(setup_config=setup_config)
+
+trainer = Trainer(logger=logger if setup_config["log_wandb"] else None)
 
 
 # Step 2: run the evaluation and training loop
@@ -91,8 +98,16 @@ for random_state in setup_config["n_seeds"]:
 
             # iterate over all models and train on fold
             for model_fn in setup_config["models"]:
-                model = model_fn()  # TODO create a modelbuilder which uses modelkwargs
+                model_architecture_kwargs = modelkwargs_dict.get(model_fn, {}).get(
+                    "architecture",
+                    {},
+                )
+                model_training_kwargs = modelkwargs_dict.get(model_fn, {}).get(
+                    "training",
+                    {},
+                )
 
+                model = model_fn()  # TODO create a modelbuilder which uses modelkwargs
                 # Fine-tune the model
                 trained_model = trainer.main_train_and_evaluate_model(
                     model=model,
@@ -101,4 +116,7 @@ for random_state in setup_config["n_seeds"]:
                     random_state=random_state,
                     dataset_id=dataset_id,
                     fold_i=fold_i,
+                    **model_training_kwargs,
                 )
+
+logger.save_results()

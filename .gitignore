@@ -228,3 +228,9 @@ pyrightconfig.json
 # End of https://www.toptal.com/developers/gitignore/api/macos,python,visualstudiocode
  
 
+
+
+wandb/
+*.json
+*.wandb
+*.txt
