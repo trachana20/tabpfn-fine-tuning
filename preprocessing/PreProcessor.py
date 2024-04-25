@@ -24,29 +24,39 @@ class PreProcessor:
         self.numerical_data_imputation = numerical_data_imputation
         self.categorical_data_imputation = categorical_data_imputation
 
-    def preprocess(self, data: DataFrame, target: str):
+    def preprocess(
+        self,
+        data_df: DataFrame,
+        target: str,
+        categorical_indicator: list,
+        attribute_names: list,
+    ):
         # Drop rows where target is missing, because we can't learn from them
-        data = self.drop_row_where_taget_is_missing(data, target)
+        data_df = self.drop_row_where_taget_is_missing(data_df, target)
 
         # Split data into features and target
-        x_data = data.drop(columns=[target])
-        target_data = data[target]
+        x_data = data_df.drop(columns=[target])
+        target_data = data_df[target]
         target_data = self.target_encoder(target_data)
 
-        # Get categorical and numerical features
+        # Get categorical and numerical features using list comprehension and zip
         categorical_features, numerical_features = (
-            self.get_categorical_and_numerical_features(x_data)
+            self.get_categorical_and_numerical_features(
+                data=data_df,
+                categorical_indicator=categorical_indicator,
+                attribute_names=attribute_names,
+                target=target,
+            )
         )
 
         # Preprocess data with missing values, encoding, outliers, and scaling
+        x_data = self.encode_categorical(x_data, categorical_features)
 
         x_data = self.impute_missing_values(
-            x_data,
-            categorical_features,
-            numerical_features,
+            data=x_data,
+            categorical_features=categorical_features,
+            numerical_features=numerical_features,
         )
-
-        x_data = self.encode_categorical(x_data, categorical_features)
 
         x_data = self.handle_outliers(
             x_data,
@@ -71,17 +81,32 @@ class PreProcessor:
     def drop_row_where_taget_is_missing(self, data, target):
         return data.dropna(subset=[target])
 
-    def get_categorical_and_numerical_features(self, data):
-        categorical_types = ["object", "category", "bool"]
-        # Categorical features have dtype "object" or "category" or "bool"
-        categorical_features = data.select_dtypes(
-            include=categorical_types,
-        ).columns.tolist()
+    def get_categorical_and_numerical_features(
+        self,
+        data,
+        categorical_indicator,
+        attribute_names,
+        target,
+    ):
+        # Get categorical and numerical features using list comprehension and zip
+        categorical_features = [
+            name
+            for indicator, name in zip(categorical_indicator, attribute_names)
+            if indicator and name != target
+        ]
+        numerical_features = [
+            name
+            for indicator, name in zip(categorical_indicator, attribute_names)
+            if not indicator and name != target
+        ]
+        # get non-numerical datatypes because for some reason
+        # the openml categorical_features are not including strings etc
+        # append to categorical features
 
-        # Numerical features have dtype other than "object", "category", or "bool"
-        numerical_features = data.select_dtypes(
-            exclude=categorical_types,
-        ).columns.tolist()
+        for column in data.columns:
+            if not pd.api.types.is_numeric_dtype(data[column]) and column != target:
+                categorical_features.append(column)
+
         return categorical_features, numerical_features
 
     def impute_missing_values(self, data, categorical_features, numerical_features):

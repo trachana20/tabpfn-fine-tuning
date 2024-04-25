@@ -18,42 +18,47 @@ if TYPE_CHECKING:
 class Trainer:
     def __init__(
         self,
-        project_name: str,
-        tabpfn_classifier: TabPFNClassifier,
-        learning_rate: float,
-        criterion,
-        optimizer,
-        log_wandb,
-        device,
+        name: str,
+        logger=None,
     ):
-        self.project_name = project_name
-        self.tabpfn_classifier = tabpfn_classifier
+        self.logger = logger
 
-        self.learning_rate = learning_rate
-        self.criterion = criterion
-        self.optimizer = optimizer(
-            self.tabpfn_classifier.model[2].parameters(),
-            lr=self.learning_rate,
-        )
-        self.log_wandb = log_wandb
-        self.device = device
+    def main_train_and_evaluate_model(
+        self,
+        model,
+        train_loader,
+        val_loader,
+        random_state,
+        dataset_id,
+        fold_i,
+        **model_kwargs,
+    ):
+        if isinstance(model, TabPFNClassifier):
+            return self.fine_tune_tabpfn_model(
+                model,
+                train_loader,
+                val_loader,
+                **model_kwargs,
+            )
+        else:
+            return self.train_sklearn_model(
+                model,
+                train_loader,
+                val_loader,
+                **model_kwargs,
+            )
 
-    def fine_tune_model(
+    def train_sklearn_model(self, model, train_loader, val_loader, **model_kwargs):
+        print("")
+
+    def fine_tune_tabpfn_model(
         self,
         train_loader: CustomDataLoader,
         val_loader: CustomDataLoader,
         epochs: int,
     ):
-        if self.log_wandb:
-            self._setup_wandb(
-                self.project_name,
-                {
-                    "learning_rate": self.learning_rate,
-                    "epochs": epochs,
-                    "dataset": train_loader.dataset.name,
-                },
-            )
         tabpfn_model = self.tabpfn_classifier.model[2]
+
         tabpfn_model.train()
         tabpfn_model.to(self.device)
 
@@ -102,10 +107,10 @@ class Trainer:
             with torch.no_grad():
                 evaluation_metrics = self.model_validation(val_loader, tabpfn_model)
 
-            if self.log_wandb:
-                metrics = {**training_metrics, **evaluation_metrics}
+            metrics = {**training_metrics, **evaluation_metrics}
+            if self.logger is not None:
                 # log metrics to wandb
-                wandb.log(metrics, step=_epoch_i)
+                self.logger.log(metrics, step=_epoch_i)
 
         tabpfn_model.eval()
         return self.tabpfn_classifier
@@ -172,17 +177,3 @@ class Trainer:
                 print(f"y_preds unique classes: {y_preds_probs.shape[-1]}")
                 print(f"labels unique classes: {np.unique(y_true).shape[0]}")
         return metrics
-
-    def _setup_wandb(
-        self,
-        project_name,
-        training_config,
-    ):
-        wandb.login()
-        # start a new wandb run to track this script
-        wandb.init(
-            # set the wandb project where this run will be logged
-            project=project_name,
-            # track hyperparameters and run metadata
-            config=training_config,
-        )
