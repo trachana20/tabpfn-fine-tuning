@@ -22,65 +22,25 @@ class Trainer:
     ):
         self.logger = logger
 
-    def main_train_and_evaluate_model(
+    def full_weight_fine_tuning(
         self,
-        model,
-        train_loader,
-        val_loader,
-        random_state,
-        dataset_id,
-        fold_i,
-        **model_kwargs,
-    ):
-        if self.logger is not None:
-            self.logger.register_incumbent(
-                random_state=random_state,
-                dataset_id=dataset_id,
-                fold_i=fold_i,
-                model=model,
-            )
-
-        model, performance_metrics = self.train_sklearn_model(
-            model,
-            train_loader,
-            val_loader,
-            **model_kwargs,
-        )
-
-        if self.logger is not None:
-            step = 0
-            self.logger.update_traing_metrics(
-                performance_metrics=performance_metrics,
-                step=step,
-            )
-
-    def train_sklearn_model(self, model, train_loader, val_loader, **training_kwargs):
-        for _, (x, y) in enumerate(train_loader):
-            start_time = time.time()
-            model.fit(X=x, y=y)
-            fitting_time = time.time() - start_time
-        for _, (x_val, y_val) in enumerate(val_loader):
-            start_time = time.time()
-            y_preds = model.predict_proba(X=x_val)
-            prediction_time = time.time() - start_time
-
-        performance_metrics = compute_classification_performance_metrics(
-            y_preds=y_preds,
-            y_true=y_val,
-        )
-        performance_metrics["time_fit"] = fitting_time
-        performance_metrics["time_predict"] = prediction_time
-
-        return model, performance_metrics
-
-    def fine_tune_tabpfn_model(
-        self,
+        tabpfn_classifier,
         train_loader: CustomDataLoader,
         val_loader: CustomDataLoader,
         epochs: int,
+        learning_rate,
+        criterion,
+        optimizer,
+        device,
     ):
-        tabpfn_model = self.tabpfn_classifier.model[2]
+        tabpfn_model = tabpfn_classifier.model[2]
 
+        criterion = criterion()
+
+        optimizer = optimizer(
+            params=tabpfn_model.parameters(),
+            learning_rate=learning_rate,
+        )
         tabpfn_model.train()
         tabpfn_model.to(self.device)
 
@@ -92,13 +52,11 @@ class Trainer:
             for _batch_i, (x_train, y_train, x_query, y_query) in enumerate(
                 train_loader,
             ):
-                self.optimizer.zero_grad()
+                optimizer.zero_grad()
 
                 # x_data shape: sequence_length, num_features
                 #  -> sequence_length, batch_size=1, num_features
-                x_data = (
-                    torch.cat([x_train, x_query], dim=0).unsqueeze(1).to(self.device)
-                )
+                x_data = torch.cat([x_train, x_query], dim=0).unsqueeze(1).to(device)
 
                 # prepare x_data with padding with zeros up to 100 features
                 x_data = nn.functional.pad(
@@ -108,7 +66,7 @@ class Trainer:
 
                 # y_train shape: sequence_length
                 #  -> sequence_length, batch_size=1
-                y_data = y_train.unsqueeze(1).to(self.device).float()
+                y_data = y_train.unsqueeze(1).to(device).float()
 
                 y_preds = tabpfn_model(
                     (x_data, y_data),
@@ -116,12 +74,12 @@ class Trainer:
                 ).reshape(-1, 10)[:, :num_classes]
 
                 y_query = y_query.long().flatten()
-                loss = self.criterion(y_preds, y_query)
+                loss = criterion(y_preds, y_query)
 
                 epoch_loss += loss.item()
 
                 loss.backward()
-                self.optimizer.step()
+                optimizer.step()
 
                 # Print batch progress
             training_metrics = {"epoch_loss": epoch_loss / num_batches}

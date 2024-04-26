@@ -3,19 +3,20 @@ from __future__ import annotations
 import torch
 from data.CustomDataloader import CustomDataLoader
 from data.DataManager import DataManager
-from gym.Trainer import Trainer
+from gym.Evaluator import Evaluator
 from logger.Logger import Logger
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import DecisionTreeClassifier
 from tabpfn import TabPFNClassifier
 from torch import nn
 from torch.optim import Adam
+from utils import set_seed_globally
 
 # Step 0: Define hyperparameters which are valid for all models and model
 # specific hyperparameters
 
 setup_config = {
-    "n_seeds": [0, 1],
+    "random_states": [0, 1],
     "k_folds": 5,
     # val_size is percentage w.r.t. the total dataset-rows ]0,1[
     "val_size": 0.25,
@@ -29,7 +30,7 @@ setup_config = {
 # Create a lookup dictionary which contains the architectural and training
 # Hyperparameters of the models
 
-# Step 1: Define the model, criterion, optimizer, device and trainer
+# Step 1: Define the model, criterion, optimizer, device and evaluator
 modelkwargs_dict = {
     TabPFNClassifier: {
         "architecture": {},
@@ -50,19 +51,16 @@ logger = Logger(
 )
 logger.setup_wandb(setup_config=setup_config)
 
-trainer = Trainer(logger=logger if setup_config["log_wandb"] else None)
+evaluator = Evaluator(logger=logger if setup_config["log_wandb"] else None)
 
 
 # Step 2: run the evaluation and training loop
-for random_state in setup_config["n_seeds"]:
-    torch.manual_seed(random_state)  # Set seed for torch RNG
-    torch.cuda.manual_seed(random_state)  # Set seed for CUDA RNG
-    torch.cuda.manual_seed_all(random_state)  # Set seed for all CUDA devices
-    torch.backends.cudnn.deterministic = True  # Ensure deterministic behavior for cudnn
-    # Disable cudnn benchmark for reproducibility
-    torch.backends.cudnn.benchmark = False
+# ---------- ---------- ---------- ---------- ---------- ---------- RANDOM STATES LOOP
+for random_state in setup_config["random_states"]:
+    set_seed_globally(random_state)
 
     for dataset_id in setup_config["dataset_ids"]:
+        # ---------- ---------- ---------- ---------- ----------  DATASET ID LOOP
         # Step 3: Load  data
         data_manager = DataManager(
             dir_path="data/dataset",
@@ -74,6 +72,7 @@ for random_state in setup_config["n_seeds"]:
             random_state=random_state,
         )
 
+        # ---------- ---------- ---------- ---------- ----------  FOLD LOOP
         for fold_i, fold in enumerate(data_k_folded):
             train_data_loader = CustomDataLoader(
                 fold["train"],
@@ -97,6 +96,7 @@ for random_state in setup_config["n_seeds"]:
             )
 
             # iterate over all models and train on fold
+            # ---------- ---------- ---------- ---------- ----------  MODEL LOOP
             for model_fn in setup_config["models"]:
                 model_architecture_kwargs = modelkwargs_dict.get(model_fn, {}).get(
                     "architecture",
@@ -109,7 +109,7 @@ for random_state in setup_config["n_seeds"]:
 
                 model = model_fn()  # TODO create a modelbuilder which uses modelkwargs
                 # Fine-tune the model
-                trained_model = trainer.main_train_and_evaluate_model(
+                trained_model = evaluator.main_train_and_evaluate_model(
                     model=model,
                     train_loader=train_data_loader,
                     val_loader=val_data_loader,
