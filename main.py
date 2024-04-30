@@ -141,45 +141,61 @@ else:
 
 os.makedirs(f"{setup_config['results_path']}/plots/model_performance/", exist_ok=True)
 
-for metric in ["accuracy", "auc", "f1", "cross_entropy", "time_fit", "time_predict"]:
-    for dataset_id in setup_config["dataset_ids"]:
-        dataset_name = dataset_mapper[dataset_id]
 
-        selected_df = results_df[results_df["dataset_id"] == dataset_id][
-            ["model", metric]
-        ]
+def visualize_performance_across_models():
+    for metric in [
+        "accuracy",
+        "auc",
+        "f1",
+        "cross_entropy",
+        "time_fit",
+        "time_predict",
+    ]:
+        for dataset_id in setup_config["dataset_ids"]:
+            dataset_name = dataset_mapper[dataset_id]
 
-        # Create barplot
-        plt.figure(figsize=(10, 6))
-        ax = sns.barplot(
-            data=selected_df,
-            x="model",
-            y=metric,
-            errorbar=("ci", 95),
-            capsize=0.1,
-            err_kws={"linewidth": 1},
-        )
-        threshold = 0.025
-        for c in ax.containers:
-            # Filter the labels
-            labels = [v if v > threshold else "" for v in c.datavalues]
-            ax.bar_label(c, labels=labels, label_type="center")
-        # Adjust bar labels position
-        # labels = ax.bar_label(ax.containers[0], fontsize=10)
+            selected_df = results_df[results_df["dataset_id"] == dataset_id][
+                ["model", metric]
+            ]
 
-        # Add labels and title
-        plt.xlabel("Model")
-        plt.ylabel(metric.capitalize())
-        plt.title(
-            f"Dataset: {dataset_name} - Average {metric.capitalize()} by Model [95% CI]",
-        )
+            # Create barplot
+            plt.figure(figsize=(10, 6))
+            ax = sns.barplot(
+                data=selected_df,
+                x="model",
+                y=metric,
+                errorbar=("ci", 95),
+                capsize=0.1,
+                err_kws={"linewidth": 1},
+            )
 
-        # Rotate x-axis labels for better readability
-        plt.xticks(rotation=45, ha="right")
+            # Adjust bar labels position
+            threshold = 0.025
+            for c in ax.containers:
+                # Filter the labels
+                labels = [v if v > threshold else "" for v in c.datavalues]
+                ax.bar_label(c, labels=labels, label_type="center")
 
-        # Show plot
-        plt.tight_layout()
-        plt.savefig(
-            f"{setup_config['results_path']}/plots/model_performance/{metric}_{dataset_name}.png",
-        )
-        plt.close()
+            # Add labels and title
+            plt.xlabel("Model")
+            plt.ylabel(metric.capitalize().replace("_", " "))
+            plt.title(
+                f"Dataset: {dataset_name} - Average {metric.capitalize()} by Model [95% CI]",
+            )
+
+            # Rotate x-axis labels for better readability
+            plt.xticks(rotation=25, ha="right")
+
+            # Show plot
+            plt.tight_layout()
+            plt.savefig(
+                f"{setup_config['results_path']}/plots/model_performance/{metric}_{dataset_name}.png",
+            )
+            plt.close()
+
+
+# ----------------- ----------------- ----------------- -----------------
+# ----------------- ----------------- ----------------- Visualize results
+# ----------------- ----------------- ----------------- -----------------
+
+visualize_performance_across_models()
