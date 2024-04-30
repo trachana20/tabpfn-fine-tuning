@@ -18,9 +18,7 @@ class DataManager:
 
     """
 
-    def __init__(self, dir_path, dataset_id=None):
-        self._use_openml = dataset_id is not None
-
+    def __init__(self, dir_path, dataset_id):
         self.dir_path = dir_path
         self.dataset_id = dataset_id
 
