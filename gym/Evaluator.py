@@ -1,18 +1,10 @@
 from __future__ import annotations
 
-from collections import defaultdict
-from typing import TYPE_CHECKING
+import time
 
 import numpy as np
-import torch
+from evaluation.model_evaluation import classification_performance_metrics
 from sklearn.metrics import accuracy_score, roc_auc_score
-from tabpfn import TabPFNClassifier
-from torch import nn
-import time
-from evaluation.model_evaluation import compute_classification_performance_metrics
-
-if TYPE_CHECKING:
-    from data.CustomDataloader import CustomDataLoader
 
 
 class Evaluator:
@@ -25,8 +17,8 @@ class Evaluator:
     def main_train_and_evaluate_model(
         self,
         model,
-        train_loader,
-        val_loader,
+        train_dataset,
+        val_dataset,
         random_state,
         dataset_id,
         fold_i,
@@ -41,9 +33,9 @@ class Evaluator:
             )
 
         model, performance_metrics = self.train_sklearn_model(
-            model,
-            train_loader,
-            val_loader,
+            model=model,
+            train_dataset=train_dataset,
+            val_dataset=val_dataset,
             **model_kwargs,
         )
 
@@ -53,18 +45,24 @@ class Evaluator:
                 performance_metrics=performance_metrics,
                 step=step,
             )
+        return model, performance_metrics
 
-    def train_sklearn_model(self, model, train_loader, val_loader, **training_kwargs):
-        for _, (x, y) in enumerate(train_loader):
-            start_time = time.time()
-            model.fit(X=x, y=y)
-            fitting_time = time.time() - start_time
-        for _, (x_val, y_val) in enumerate(val_loader):
-            start_time = time.time()
-            y_preds = model.predict_proba(X=x_val)
-            prediction_time = time.time() - start_time
+    def train_sklearn_model(self, model, train_dataset, val_dataset, **training_kwargs):
+        x_train = train_dataset.features
+        y_train = train_dataset.labels
 
-        performance_metrics = compute_classification_performance_metrics(
+        start_time = time.time()
+        model.fit(X=x_train, y=y_train)
+        fitting_time = time.time() - start_time
+
+        x_val = val_dataset.features
+        y_val = val_dataset.labels
+
+        start_time = time.time()
+        y_preds = model.predict_proba(X=x_val)
+        prediction_time = time.time() - start_time
+
+        performance_metrics = classification_performance_metrics(
             y_preds=y_preds,
             y_true=y_val,
         )

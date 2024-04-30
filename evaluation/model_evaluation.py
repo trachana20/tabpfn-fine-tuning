@@ -8,7 +8,7 @@ from sklearn.metrics import log_loss
 import numpy as np
 
 
-def compute_classification_performance_metrics(y_preds, y_true):
+def classification_performance_metrics(y_preds, y_true):
     # y_preds have shape (sequence_length, classes)
     # y_true has shape (sequence_length)
 

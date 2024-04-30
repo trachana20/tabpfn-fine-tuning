@@ -9,7 +9,7 @@ from sklearn.metrics import accuracy_score, roc_auc_score
 from tabpfn import TabPFNClassifier
 from torch import nn
 import time
-from evaluation.model_evaluation import compute_classification_performance_metrics
+from evaluation.model_evaluation import classification_performance_metrics
 
 if TYPE_CHECKING:
     from data.CustomDataloader import CustomDataLoader
