@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-import math
+
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
@@ -10,7 +10,6 @@ from data.DataManager import DataManager
 from gym.Evaluator import Evaluator
 from logger.Logger import Logger
 from models.FineTuneTabPFNClassifier import FineTuneTabPFNClassifier
-from scipy import stats
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import DecisionTreeClassifier
 from tabpfn import TabPFNClassifier
@@ -101,7 +100,7 @@ else:
                         {},
                     )
 
-                    # TODO create a modelbuilder which uses modelkwargs
+                    # create a model which uses modelkwargs
                     model = model_fn(**model_architecture_kwargs)
 
                     # evaluate the model given the right setting
@@ -157,24 +156,22 @@ for metric in ["accuracy", "auc", "f1", "cross_entropy", "time_fit", "time_predi
             x="model",
             y=metric,
             errorbar=("ci", 95),
-            capsize=0.2,
-            color="lightblue",
+            capsize=0.1,
+            err_kws={"linewidth": 1},
         )
-
+        threshold = 0.025
+        for c in ax.containers:
+            # Filter the labels
+            labels = [v if v > threshold else "" for v in c.datavalues]
+            ax.bar_label(c, labels=labels, label_type="center")
         # Adjust bar labels position
-        labels = ax.bar_label(ax.containers[0], fontsize=10)
-        plt.yscale("log")
-
-        # Inverse transformation for y-axis
-        plt.gca().invert_yaxis()
-        # Set y-axis range
-        ax.set_ylim(0.65, 1)
+        # labels = ax.bar_label(ax.containers[0], fontsize=10)
 
         # Add labels and title
         plt.xlabel("Model")
         plt.ylabel(metric.capitalize())
         plt.title(
-            f"Average {metric.capitalize()} by Model [95% CI], Dataset: {dataset_name}"
+            f"Dataset: {dataset_name} - Average {metric.capitalize()} by Model [95% CI]",
         )
 
         # Rotate x-axis labels for better readability
@@ -183,6 +180,6 @@ for metric in ["accuracy", "auc", "f1", "cross_entropy", "time_fit", "time_predi
         # Show plot
         plt.tight_layout()
         plt.savefig(
-            f"{setup_config['results_path']}/plots/model_performance/{metric}_{dataset_name}.png"
+            f"{setup_config['results_path']}/plots/model_performance/{metric}_{dataset_name}.png",
         )
-    print("")
+        plt.close()

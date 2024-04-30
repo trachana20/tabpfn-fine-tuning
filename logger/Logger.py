@@ -14,7 +14,8 @@ class Logger:
         self.results_path = results_path
 
     def setup_wandb(self, setup_config):
-        wandb.login()
+        if setup_config["log_wandb"]:
+            wandb.login()
         # start a new wandb run to track this script
 
     def register_incumbent(self, random_state, dataset_id, fold_i, model):
