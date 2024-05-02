@@ -26,7 +26,7 @@ setup_config = {
     # val_size is percentage w.r.t. the total dataset-rows ]0,1[
     "val_size": 0.25,
     "num_workers": 0,
-    "dataset_ids": [168746],  # , 23381]
+    "dataset_mapping": {168746: "Titanic", 9982: "Dress-Sales"},
     "log_wandb": False,
     "models": [
         FineTuneTabPFNClassifier,
@@ -47,7 +47,7 @@ modelkwargs_dict = {
     },
 }
 
-dataset_mapper = {168746: "Titanic"}
+dataset_mapper = {168746: "Titanic", 9982: "Dress-Sales"}
 
 
 logger = Logger(
@@ -70,7 +70,7 @@ else:
         set_seed_globally(random_state)
 
         # ---------- ---------- ---------- ---------- ----------  DATASET ID LOOP
-        for dataset_id in setup_config["dataset_ids"]:
+        for dataset_id in setup_config["dataset_mapping"].keys():
             # Step 3: Load  data
             data_manager = DataManager(
                 dir_path="data/dataset",
@@ -142,7 +142,9 @@ else:
 os.makedirs(f"{setup_config['results_path']}/plots/model_performance/", exist_ok=True)
 
 
-def bar_plot_dataset_performance_across_folds(metric, dataset_id, plot_settings):
+def bar_plot_dataset_performance_across_folds(
+    results_df, metric, dataset_id, plot_settings
+):
     dataset_name = dataset_mapper[dataset_id]
 
     selected_df = results_df[results_df["dataset_id"] == dataset_id][["model", metric]]
@@ -176,9 +178,9 @@ def bar_plot_dataset_performance_across_folds(metric, dataset_id, plot_settings)
     plt.xlabel("Model")
 
     if plot_settings.get(metric, {}).get("y_label"):
-        plt.ylabel(plot_settings[metric]["y_label"])
+        plt.ylabel(f"{plot_settings[metric]['y_label']} [Across Folds]")
     else:
-        plt.ylabel(metric.capitalize().replace("_", " "))
+        plt.ylabel(f"{metric.capitalize().replace('_', '')} [Across Folds]")
 
     plt.title(
         f"Dataset: {dataset_name} - Average {metric.capitalize()} by Model [95% CI]",
@@ -195,9 +197,7 @@ def bar_plot_dataset_performance_across_folds(metric, dataset_id, plot_settings)
     plt.close()
 
 
-def bar_plot_performance_across_datasets(dataset_ids, metric, plot_settings):
-    dataset_name = dataset_mapper[dataset_id]
-
+def bar_plot_performance_across_datasets(results_df, metric, plot_settings):
     selected_df = results_df[["model", metric]]
 
     # Create barplot
@@ -229,12 +229,12 @@ def bar_plot_performance_across_datasets(dataset_ids, metric, plot_settings):
     plt.xlabel("Model")
 
     if plot_settings.get(metric, {}).get("y_label"):
-        plt.ylabel(plot_settings[metric]["y_label"])
+        plt.ylabel(f"{plot_settings[metric]['y_label']} [Across Datasets]")
     else:
-        plt.ylabel(metric.capitalize().replace("_", " "))
+        plt.ylabel(f"{metric.capitalize().replace('_', ' ')} [Across Datasets]")
 
     plt.title(
-        f"Dataset: {dataset_name} - Average {metric.capitalize()} by Model [95% CI]",
+        f"Average {metric.capitalize()} by Model [95% CI]",
     )
 
     # Rotate x-axis labels for better readability
@@ -243,7 +243,7 @@ def bar_plot_performance_across_datasets(dataset_ids, metric, plot_settings):
     # Show plot
     plt.tight_layout()
     plt.savefig(
-        f"{setup_config['results_path']}/plots/model_performance/{metric}_{dataset_name}.png",
+        f"{setup_config['results_path']}/plots/model_performance/{metric}_across_datasets.png",
     )
     plt.close()
 
@@ -260,17 +260,19 @@ plot_settings = {
     "f1": {"bar_label": "center"},
     "cross_entropy": {"bar_label": "center"},
 }
-performance_metrics = ["accuracy"]
-#    , "auc",
-#     "f1",
-#     "cross_entropy",
-#     "time_fit",
-#     "time_predict",
-# ]
+performance_metrics = [
+    "accuracy",
+    "auc",
+    "f1",
+    "cross_entropy",
+    "time_fit",
+    "time_predict",
+]
 
 for metric in performance_metrics:
-    for dataset_id in setup_config["dataset_ids"]:
+    for dataset_id in setup_config["dataset_mapping"].keys():
         bar_plot_dataset_performance_across_folds(
+            results_df=results_df,
             metric=metric,
             dataset_id=dataset_id,
             plot_settings=plot_settings,
@@ -279,7 +281,7 @@ for metric in performance_metrics:
 
 for metric in performance_metrics:
     bar_plot_performance_across_datasets(
-        dataset_ids=setup_config["dataset_ids"],
+        results_df=results_df,
         metric=metric,
         plot_settings=plot_settings,
     )

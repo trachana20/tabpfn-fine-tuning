@@ -1,5 +1,6 @@
 import torch.nn as nn
 import torch
+import os
 
 
 class MockTabPFN(nn.Module):
@@ -20,4 +21,6 @@ class MockTabPFN(nn.Module):
 
     def save_weights(self, file_path):
         # Ensure the path exists
+        dir_path = os.path.join(*file_path.split("/")[:-1])
+        os.makedirs(dir_path, exist_ok=True)
         torch.save(self.linear.weight, file_path)
