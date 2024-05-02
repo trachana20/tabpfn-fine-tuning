@@ -235,3 +235,4 @@ wandb/
 *.wandb
 *.txt
 results/
+*.png

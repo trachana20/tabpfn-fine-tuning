@@ -142,60 +142,144 @@ else:
 os.makedirs(f"{setup_config['results_path']}/plots/model_performance/", exist_ok=True)
 
 
-def visualize_performance_across_models():
-    for metric in [
-        "accuracy",
-        "auc",
-        "f1",
-        "cross_entropy",
-        "time_fit",
-        "time_predict",
-    ]:
-        for dataset_id in setup_config["dataset_ids"]:
-            dataset_name = dataset_mapper[dataset_id]
+def bar_plot_dataset_performance_across_folds(metric, dataset_id, plot_settings):
+    dataset_name = dataset_mapper[dataset_id]
 
-            selected_df = results_df[results_df["dataset_id"] == dataset_id][
-                ["model", metric]
-            ]
+    selected_df = results_df[results_df["dataset_id"] == dataset_id][["model", metric]]
 
-            # Create barplot
-            plt.figure(figsize=(10, 6))
-            ax = sns.barplot(
-                data=selected_df,
-                x="model",
-                y=metric,
-                errorbar=("ci", 95),
-                capsize=0.1,
-                err_kws={"linewidth": 1},
-            )
+    # Create barplot
+    plt.figure(figsize=(10, 6))
+    ax = sns.barplot(
+        data=selected_df,
+        x="model",
+        y=metric,
+        errorbar=("ci", 95),
+        capsize=0.1,
+        err_kws={"linewidth": 1},
+    )
 
-            # Adjust bar labels position
-            threshold = 0.025
-            for c in ax.containers:
-                # Filter the labels
-                labels = [v if v > threshold else "" for v in c.datavalues]
-                ax.bar_label(c, labels=labels, label_type="center")
+    if plot_settings.get(metric, {}).get("y_scale") == "log":
+        plt.yscale("log")
 
-            # Add labels and title
-            plt.xlabel("Model")
-            plt.ylabel(metric.capitalize().replace("_", " "))
-            plt.title(
-                f"Dataset: {dataset_name} - Average {metric.capitalize()} by Model [95% CI]",
-            )
+    # Adjust bar labels position
+    if plot_settings.get(metric, {}).get("bar_label") == "top":
+        ax.bar_label(ax.containers[0])
 
-            # Rotate x-axis labels for better readability
-            plt.xticks(rotation=25, ha="right")
+    elif plot_settings.get(metric, {}).get("bar_label") == "center":
+        threshold = 0.025
+        for c in ax.containers:
+            # Filter the labels
+            labels = [v if v > threshold else "" for v in c.datavalues]
+            ax.bar_label(c, labels=labels, label_type="center")
 
-            # Show plot
-            plt.tight_layout()
-            plt.savefig(
-                f"{setup_config['results_path']}/plots/model_performance/{metric}_{dataset_name}.png",
-            )
-            plt.close()
+    # Add labels and title
+    plt.xlabel("Model")
+
+    if plot_settings.get(metric, {}).get("y_label"):
+        plt.ylabel(plot_settings[metric]["y_label"])
+    else:
+        plt.ylabel(metric.capitalize().replace("_", " "))
+
+    plt.title(
+        f"Dataset: {dataset_name} - Average {metric.capitalize()} by Model [95% CI]",
+    )
+
+    # Rotate x-axis labels for better readability
+    plt.xticks(rotation=25, ha="right")
+
+    # Show plot
+    plt.tight_layout()
+    plt.savefig(
+        f"{setup_config['results_path']}/plots/model_performance/{metric}_{dataset_name}.png",
+    )
+    plt.close()
+
+
+def bar_plot_performance_across_datasets(dataset_ids, metric, plot_settings):
+    dataset_name = dataset_mapper[dataset_id]
+
+    selected_df = results_df[["model", metric]]
+
+    # Create barplot
+    plt.figure(figsize=(10, 6))
+    ax = sns.barplot(
+        data=selected_df,
+        x="model",
+        y=metric,
+        errorbar=("ci", 95),
+        capsize=0.1,
+        err_kws={"linewidth": 1},
+    )
+
+    if plot_settings.get(metric, {}).get("y_scale") == "log":
+        plt.yscale("log")
+
+    # Adjust bar labels position
+    if plot_settings.get(metric, {}).get("bar_label") == "top":
+        ax.bar_label(ax.containers[0])
+
+    elif plot_settings.get(metric, {}).get("bar_label") == "center":
+        threshold = 0.025
+        for c in ax.containers:
+            # Filter the labels
+            labels = [v if v > threshold else "" for v in c.datavalues]
+            ax.bar_label(c, labels=labels, label_type="center")
+
+    # Add labels and title
+    plt.xlabel("Model")
+
+    if plot_settings.get(metric, {}).get("y_label"):
+        plt.ylabel(plot_settings[metric]["y_label"])
+    else:
+        plt.ylabel(metric.capitalize().replace("_", " "))
+
+    plt.title(
+        f"Dataset: {dataset_name} - Average {metric.capitalize()} by Model [95% CI]",
+    )
+
+    # Rotate x-axis labels for better readability
+    plt.xticks(rotation=25, ha="right")
+
+    # Show plot
+    plt.tight_layout()
+    plt.savefig(
+        f"{setup_config['results_path']}/plots/model_performance/{metric}_{dataset_name}.png",
+    )
+    plt.close()
 
 
 # ----------------- ----------------- ----------------- -----------------
 # ----------------- ----------------- ----------------- Visualize results
 # ----------------- ----------------- ----------------- -----------------
 
-visualize_performance_across_models()
+plot_settings = {
+    "time_fit": {"y_scale": "log", "y_label": "Time [s]", "bar_label": "top"},
+    "time_predict": {"y_scale": "log", "y_label": "Time [s]", "bar_label": "top"},
+    "accuracy": {"bar_label": "center"},
+    "auc": {"bar_label": "center"},
+    "f1": {"bar_label": "center"},
+    "cross_entropy": {"bar_label": "center"},
+}
+performance_metrics = ["accuracy"]
+#    , "auc",
+#     "f1",
+#     "cross_entropy",
+#     "time_fit",
+#     "time_predict",
+# ]
+
+for metric in performance_metrics:
+    for dataset_id in setup_config["dataset_ids"]:
+        bar_plot_dataset_performance_across_folds(
+            metric=metric,
+            dataset_id=dataset_id,
+            plot_settings=plot_settings,
+        )
+
+
+for metric in performance_metrics:
+    bar_plot_performance_across_datasets(
+        dataset_ids=setup_config["dataset_ids"],
+        metric=metric,
+        plot_settings=plot_settings,
+    )

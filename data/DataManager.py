@@ -62,8 +62,8 @@ class DataManager:
         task = openml.tasks.get_task(
             task_id=self.dataset_id,
             download_qualities=True,
-            download_features_meta_data=True,
-            download_splits=True,
+            # download_features_meta_data=True,
+            # download_splits=True,
         )
         # TODO ignore future warning! We use version, where defaults are correct
         dataset = task.get_dataset()
