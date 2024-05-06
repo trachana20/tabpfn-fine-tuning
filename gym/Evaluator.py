@@ -14,7 +14,7 @@ class Evaluator:
     ):
         self.logger = logger
 
-    def main_train_and_evaluate_model(
+    def fit_and_predict_model(
         self,
         model,
         train_dataset,
@@ -32,7 +32,7 @@ class Evaluator:
                 model=model,
             )
 
-        model, performance_metrics = self.train_sklearn_model(
+        model, performance_metrics = self.fit_and_predict_sklearn_model(
             model=model,
             train_dataset=train_dataset,
             val_dataset=val_dataset,
@@ -47,7 +47,9 @@ class Evaluator:
             )
         return model, performance_metrics
 
-    def train_sklearn_model(self, model, train_dataset, val_dataset, **training_kwargs):
+    def fit_and_predict_sklearn_model(
+        self, model, train_dataset, val_dataset, **training_kwargs
+    ):
         x_train = train_dataset.features
         y_train = train_dataset.labels
 

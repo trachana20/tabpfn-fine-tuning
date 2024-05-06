@@ -5,14 +5,13 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
+from models.FineTuneTabPFNClassifier import FineTuneTabPFNClassifier
 from sklearn.metrics import accuracy_score, roc_auc_score
-from tabpfn import TabPFNClassifier
 from torch import nn
-import time
-from evaluation.model_evaluation import classification_performance_metrics
 
 if TYPE_CHECKING:
     from data.CustomDataloader import CustomDataLoader
+from pathlib import Path
 
 
 class Trainer:
@@ -21,6 +20,31 @@ class Trainer:
         logger=None,
     ):
         self.logger = logger
+
+    def fine_tune_model(
+        self,
+        tabpfn_classifier,
+        train_loader,
+        val_loader,
+        fine_tune_type,
+        **kwargs,
+    ):
+        weights_path = kwargs.get("architecture", {}).get("weights_path", "")
+        # 1. check if weights_path exists and if so load the fine_tune model
+        if Path(weights_path).exists():
+            return FineTuneTabPFNClassifier.load_fined_tuned_model(weights_path)
+
+        # 2. if weights_path does not exist, fine_tune the model
+        # call the correct fine tuning function
+        if fine_tune_type == "full_weight_fine_tuning":
+            return self.full_weight_fine_tuning(
+                tabpfn_classifier=tabpfn_classifier,
+                train_loader=train_loader,
+                val_loader=val_loader,
+                **kwargs,
+            )
+        else:
+            raise ValueError(f"Fine tune type {fine_tune_type} not supported")
 
     def full_weight_fine_tuning(
         self,

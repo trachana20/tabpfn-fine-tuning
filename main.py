@@ -6,8 +6,10 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 import torch
+from data.CustomDataloader import CustomDataLoader
 from data.DataManager import DataManager
 from gym.Evaluator import Evaluator
+from gym.Trainer import Trainer
 from logger.Logger import Logger
 from models.FineTuneTabPFNClassifier import FineTuneTabPFNClassifier
 from sklearn.ensemble import RandomForestClassifier
@@ -17,6 +19,10 @@ from utils import set_seed_globally
 
 # Step 0: Define hyperparameters which are valid for all models and model
 # specific hyperparameters
+import os
+
+os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
+
 
 setup_config = {
     "project_name": "Finetune-TabPFN",
@@ -28,12 +34,12 @@ setup_config = {
     "num_workers": 0,
     "dataset_mapping": {168746: "Titanic", 9982: "Dress-Sales"},
     "log_wandb": False,
-    "models": [
-        FineTuneTabPFNClassifier,
-        RandomForestClassifier,
-        DecisionTreeClassifier,
-        TabPFNClassifier,
-    ],
+    "models": {
+        "FineTuneTabPFNClassifier_full_weight": FineTuneTabPFNClassifier,
+        "RandomForestClassifier": RandomForestClassifier,
+        "DecisionTreeClassifier": DecisionTreeClassifier,
+        "TabPFNClassifier": TabPFNClassifier,
+    },
     "device": "cuda" if torch.cuda.is_available() else "cpu",
 }
 # Create a lookup dictionary which contains the architectural and training
@@ -41,9 +47,18 @@ setup_config = {
 
 # Step 1: Define the model, criterion, optimizer, device and evaluator
 modelkwargs_dict = {
-    FineTuneTabPFNClassifier: {
-        "architecture": {"tabpfn_classifier": TabPFNClassifier(), "path": ""},
-        "training": {},
+    "FineTuneTabPFNClassifier_full_weight": {
+        "architecture": {
+            "tabpfn_classifier": TabPFNClassifier(),
+            "weights_path": "model_weights/FullWeightFineTuneTabPFN.pth",
+            "fine_tune_type": "full_weight_fine_tuning",
+        },
+        "training": {
+            "epochs": 10,
+            "learning_rate": 0.01,
+            "criterion": "CrossEntropyLoss",
+            "optimizer": "Adam",
+        },
     },
 }
 
@@ -58,9 +73,11 @@ logger = Logger(
 logger.setup_wandb(setup_config=setup_config)
 
 evaluator = Evaluator(logger=logger if setup_config["log_wandb"] else None)
-
+trainer = Trainer(logger=logger)
 
 results_df = None
+
+
 if os.path.exists(f"{setup_config['results_path']}results_df.pkl"):
     results_df = pd.read_pickle(f"{setup_config['results_path']}results_df.pkl")
 else:
@@ -70,7 +87,7 @@ else:
         set_seed_globally(random_state)
 
         # ---------- ---------- ---------- ---------- ----------  DATASET ID LOOP
-        for dataset_id in setup_config["dataset_mapping"].keys():
+        for dataset_id in setup_config["dataset_mapping"]:
             # Step 3: Load  data
             data_manager = DataManager(
                 dir_path="data/dataset",
@@ -85,27 +102,49 @@ else:
             # ---------- ---------- ---------- ---------- ----------  FOLD LOOP
             for fold_i, fold in enumerate(data_k_folded):
                 train_dataset = fold["train"]
-                test_dataset = fold["test"]
                 val_dataset = fold["val"]
+                test_dataset = fold["test"]
 
                 # iterate over all models and train on fold
                 # ---------- ---------- ---------- ---------- ----------  MODEL LOOP
-                for model_fn in setup_config["models"]:
-                    model_architecture_kwargs = modelkwargs_dict.get(model_fn, {}).get(
+                for model_name, model_fn in setup_config["models"].items():
+                    model_architecture_kwargs = modelkwargs_dict.get(
+                        model_name,
+                        {},
+                    ).get(
                         "architecture",
                         {},
                     )
-                    model_training_kwargs = modelkwargs_dict.get(model_fn, {}).get(
+                    model_training_kwargs = modelkwargs_dict.get(model_name, {}).get(
                         "training",
                         {},
                     )
-
-                    # create a model which uses modelkwargs
-                    model = model_fn(**model_architecture_kwargs)
+                    # if the model is a fine-tuning model, we need to fine-tune the model
+                    if "FineTuneTabPFNClassifier" in model_name:
+                        model = trainer.fine_tune_model(
+                            tabpfn_classifier=model_fn,
+                            train_loader=CustomDataLoader(
+                                dataset=train_dataset,
+                                sequence_length=train_dataset.number_rows,
+                                shuffle=True,
+                                num_workers=0,
+                            ),
+                            val_loader=CustomDataLoader(
+                                dataset=val_dataset,
+                                sequence_length=val_dataset.number_rows,
+                                shuffle=True,
+                                num_workers=0,
+                            ),
+                            fine_tune_type=model_architecture_kwargs["fine_tune_type"],
+                            **modelkwargs_dict.get(model_name, {}),
+                        )
+                    else:
+                        # create a model which uses modelkwargs
+                        model = model_fn(**model_architecture_kwargs)
 
                     # evaluate the model given the right setting
                     trained_model, performance_metrics = (
-                        evaluator.main_train_and_evaluate_model(
+                        evaluator.fit_and_predict_model(
                             model=model,
                             train_dataset=train_dataset,
                             val_dataset=val_dataset,
@@ -143,7 +182,10 @@ os.makedirs(f"{setup_config['results_path']}/plots/model_performance/", exist_ok
 
 
 def bar_plot_dataset_performance_across_folds(
-    results_df, metric, dataset_id, plot_settings
+    results_df,
+    metric,
+    dataset_id,
+    plot_settings,
 ):
     dataset_name = dataset_mapper[dataset_id]
 
@@ -270,7 +312,7 @@ performance_metrics = [
 ]
 
 for metric in performance_metrics:
-    for dataset_id in setup_config["dataset_mapping"].keys():
+    for dataset_id in setup_config["dataset_mapping"]:
         bar_plot_dataset_performance_across_folds(
             results_df=results_df,
             metric=metric,

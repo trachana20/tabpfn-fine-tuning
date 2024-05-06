@@ -6,9 +6,9 @@ from models.MockTabPFN import MockTabPFN
 
 
 class FineTuneTabPFNClassifier:
-    def __init__(self, tabpfn_classifier, path):
+    def __init__(self, tabpfn_classifier, weights_path):
         self.tabpfn_classifier = tabpfn_classifier
-        self.path = path
+        self.path = weights_path
 
         # fine_tuned_model = load_model_only_inference(path)
         fine_tuned_model = MockTabPFN(tabpfn_classifier=tabpfn_classifier)
@@ -26,5 +26,5 @@ class FineTuneTabPFNClassifier:
     def predict_proba(self, X):
         return self.tabpfn_classifier.predict_proba(X=X)
 
-    def load_fined_tuned_model(self, path):
-        return torch.load(path)
+    def load_fined_tuned_model(self, weights_path):
+        return torch.load(weights_path)
