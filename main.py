@@ -15,14 +15,12 @@ from models.FineTuneTabPFNClassifier import FineTuneTabPFNClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import DecisionTreeClassifier
 from tabpfn import TabPFNClassifier
+from torch.nn import CrossEntropyLoss
+from torch.optim import Adam
 from utils import set_seed_globally
 
 # Step 0: Define hyperparameters which are valid for all models and model
 # specific hyperparameters
-import os
-
-os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
-
 
 setup_config = {
     "project_name": "Finetune-TabPFN",
@@ -55,9 +53,9 @@ modelkwargs_dict = {
         },
         "training": {
             "epochs": 10,
-            "learning_rate": 0.01,
-            "criterion": "CrossEntropyLoss",
-            "optimizer": "Adam",
+            "learning_rate": 0.000001,
+            "criterion": CrossEntropyLoss,
+            "optimizer": Adam,
         },
     },
 }

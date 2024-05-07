@@ -11,6 +11,8 @@
 Icon
 
 
+*.pyc
+*.pth
 # Thumbnails
 ._*
 

@@ -31,7 +31,7 @@ class Trainer:
     ):
         # This function materializes/instantiates the tabpfn classifier
         # either an existing model is loaded or a tabpfn is finetuned
-        weights_path = kwargs.get("architectural", {}).get("weights_path", "")
+        weights_path = kwargs.get("architectural", {}).get("weights_path", None)
         # 1. check if weights_path exists and if so load the fine_tune model
 
         tabpfn_classifier = kwargs.get("architectural", {}).get(
@@ -41,7 +41,7 @@ class Trainer:
         if Path(weights_path).exists():
             return FineTuneTabPFNClassifier(
                 tabpfn_classifier=tabpfn_classifier,
-                path=weights_path,
+                weights_path=weights_path,
             )
 
         # 2. if weights_path does not exist, fine_tune the model
@@ -51,42 +51,52 @@ class Trainer:
                 tabpfn_classifier=tabpfn_classifier,
                 train_loader=train_loader,
                 val_loader=val_loader,
+                weights_path=weights_path,
                 device=device,
                 **kwargs,
             )
         else:
             raise ValueError(f"Fine tune type {fine_tune_type} not supported")
 
+    def _store_model_weights(self, weights, weights_path):
+        torch.save(weights, weights_path)
+
     def full_weight_fine_tuning(
         self,
         tabpfn_classifier,
         train_loader: CustomDataLoader,
         val_loader: CustomDataLoader,
+        weights_path,
         architectural,
         training,
         device,
     ):
         tabpfn_model = tabpfn_classifier.model[2]
 
-        criterion = criterion()
+        criterion = training["criterion"]()
 
-        optimizer = optimizer(
+        optimizer = training["optimizer"](
             params=tabpfn_model.parameters(),
-            learning_rate=learning_rate,
+            lr=training["learning_rate"],
         )
         tabpfn_model.train()
-        tabpfn_model.to(self.device)
+        tabpfn_model.to(device)
 
         num_classes = train_loader.dataset.num_classes
 
-        for _epoch_i in range(epochs):
+        for _epoch_i in range(training["epochs"]):
             epoch_loss = 0.0  # initialize epoch loss
             num_batches = len(train_loader)
-            for _batch_i, (x_train, y_train, x_query, y_query) in enumerate(
+            for _batch_i, (x, y) in enumerate(
                 train_loader,
             ):
                 optimizer.zero_grad()
 
+                single_eval_pos = x.shape[0] // 2
+                x_train = x[:single_eval_pos]
+                y_train = y[:single_eval_pos]
+                x_query = x[single_eval_pos:]
+                y_query = y[single_eval_pos:]
                 # x_data shape: sequence_length, num_features
                 #  -> sequence_length, batch_size=1, num_features
                 x_data = torch.cat([x_train, x_query], dim=0).unsqueeze(1).to(device)
@@ -116,32 +126,39 @@ class Trainer:
 
                 # Print batch progress
             training_metrics = {"epoch_loss": epoch_loss / num_batches}
+            print(f"Epoch {_epoch_i} loss: {epoch_loss / num_batches}")
             # Call validation function after each epoch
             with torch.no_grad():
-                evaluation_metrics = self.model_validation(val_loader, tabpfn_model)
+                evaluation_metrics = self.model_validation(
+                    tabpfn_classifier=tabpfn_classifier,
+                    tabpfn_model=tabpfn_model,
+                    val_loader=val_loader,
+                )
 
-            metrics = {**training_metrics, **evaluation_metrics}
-            if self.logger is not None:
-                # log metrics to wandb
-                self.logger._log(metrics, step=_epoch_i)
+            # metrics = {**training_metrics, **evaluation_metrics}
+            # if self.logger is not None:
+            #     # log metrics to wandb
+            #     self.logger.update_traing_metrics(metrics, step=_epoch_i)
 
+        self._store_model_weights(tabpfn_model.state_dict(), weights_path)
         tabpfn_model.eval()
-        return self.tabpfn_classifier
+        return tabpfn_classifier
 
-    def model_validation(self, val_loader, tabpfn_model):
+    def model_validation(self, tabpfn_classifier, tabpfn_model, val_loader):
         metrics = []
 
         with torch.no_grad():
-            for _batch_i, (
-                x_train_val,
-                y_train_val,
-                x_query_val,
-                y_query_val,
-            ) in enumerate(val_loader):
-                self.tabpfn_classifier.model = (None, None, tabpfn_model)
+            for _batch_i, (x, y) in enumerate(val_loader):
+                tabpfn_classifier.model = (None, None, tabpfn_model)
 
-                self.tabpfn_classifier.fit(x_train_val, y_train_val)
-                y_preds = self.tabpfn_classifier.predict_proba(x_query_val)
+                single_eval_pos = x.shape[0] // 2
+                x_train_val = x[:single_eval_pos]
+                y_train_val = y[:single_eval_pos]
+                x_query_val = x[single_eval_pos:]
+                y_query_val = y[single_eval_pos:]
+
+                tabpfn_classifier.fit(x_train_val, y_train_val)
+                y_preds = tabpfn_classifier.predict_proba(x_query_val)
 
                 batch_metrics = self.compute_metrics(
                     y_query_val,
