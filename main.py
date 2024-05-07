@@ -48,7 +48,7 @@ setup_config = {
 # Step 1: Define the model, criterion, optimizer, device and evaluator
 modelkwargs_dict = {
     "FineTuneTabPFNClassifier_full_weight": {
-        "architecture": {
+        "architectural": {
             "tabpfn_classifier": TabPFNClassifier(),
             "weights_path": "model_weights/FullWeightFineTuneTabPFN.pth",
             "fine_tune_type": "full_weight_fine_tuning",
@@ -108,11 +108,11 @@ else:
                 # iterate over all models and train on fold
                 # ---------- ---------- ---------- ---------- ----------  MODEL LOOP
                 for model_name, model_fn in setup_config["models"].items():
-                    model_architecture_kwargs = modelkwargs_dict.get(
+                    model_architectural_kwargs = modelkwargs_dict.get(
                         model_name,
                         {},
                     ).get(
-                        "architecture",
+                        "architectural",
                         {},
                     )
                     model_training_kwargs = modelkwargs_dict.get(model_name, {}).get(
@@ -122,7 +122,6 @@ else:
                     # if the model is a fine-tuning model, we need to fine-tune the model
                     if "FineTuneTabPFNClassifier" in model_name:
                         model = trainer.fine_tune_model(
-                            tabpfn_classifier=model_fn,
                             train_loader=CustomDataLoader(
                                 dataset=train_dataset,
                                 sequence_length=train_dataset.number_rows,
@@ -135,12 +134,13 @@ else:
                                 shuffle=True,
                                 num_workers=0,
                             ),
-                            fine_tune_type=model_architecture_kwargs["fine_tune_type"],
+                            fine_tune_type=model_architectural_kwargs["fine_tune_type"],
+                            device=setup_config["device"],
                             **modelkwargs_dict.get(model_name, {}),
                         )
                     else:
                         # create a model which uses modelkwargs
-                        model = model_fn(**model_architecture_kwargs)
+                        model = model_fn(**model_architectural_kwargs)
 
                     # evaluate the model given the right setting
                     trained_model, performance_metrics = (

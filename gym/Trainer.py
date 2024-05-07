@@ -23,16 +23,26 @@ class Trainer:
 
     def fine_tune_model(
         self,
-        tabpfn_classifier,
         train_loader,
         val_loader,
         fine_tune_type,
+        device,
         **kwargs,
     ):
-        weights_path = kwargs.get("architecture", {}).get("weights_path", "")
+        # This function materializes/instantiates the tabpfn classifier
+        # either an existing model is loaded or a tabpfn is finetuned
+        weights_path = kwargs.get("architectural", {}).get("weights_path", "")
         # 1. check if weights_path exists and if so load the fine_tune model
+
+        tabpfn_classifier = kwargs.get("architectural", {}).get(
+            "tabpfn_classifier",
+            None,
+        )
         if Path(weights_path).exists():
-            return FineTuneTabPFNClassifier.load_fined_tuned_model(weights_path)
+            return FineTuneTabPFNClassifier(
+                tabpfn_classifier=tabpfn_classifier,
+                path=weights_path,
+            )
 
         # 2. if weights_path does not exist, fine_tune the model
         # call the correct fine tuning function
@@ -41,6 +51,7 @@ class Trainer:
                 tabpfn_classifier=tabpfn_classifier,
                 train_loader=train_loader,
                 val_loader=val_loader,
+                device=device,
                 **kwargs,
             )
         else:
@@ -51,10 +62,8 @@ class Trainer:
         tabpfn_classifier,
         train_loader: CustomDataLoader,
         val_loader: CustomDataLoader,
-        epochs: int,
-        learning_rate,
-        criterion,
-        optimizer,
+        architectural,
+        training,
         device,
     ):
         tabpfn_model = tabpfn_classifier.model[2]
