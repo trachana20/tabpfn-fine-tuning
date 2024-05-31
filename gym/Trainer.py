@@ -32,12 +32,13 @@ class Trainer:
         # This function materializes/instantiates the tabpfn classifier
         # either an existing model is loaded or a tabpfn is finetuned
         weights_path = kwargs.get("architectural", {}).get("weights_path", None)
-        # 1. check if weights_path exists and if so load the fine_tune model
 
         tabpfn_classifier = kwargs.get("architectural", {}).get(
             "tabpfn_classifier",
             None,
         )
+
+        # 1. check if weights_path exists and if so load the fine_tune model
         if Path(weights_path).exists():
             return FineTuneTabPFNClassifier(
                 tabpfn_classifier=tabpfn_classifier,

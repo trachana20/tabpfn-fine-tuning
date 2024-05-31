@@ -7,7 +7,11 @@ from pathlib import Path
 import openml
 import pandas as pd
 from preprocessing.PreProcessor import PreProcessor
-from sklearn.model_selection import StratifiedKFold, train_test_split
+from sklearn.model_selection import (
+    StratifiedKFold,
+    StratifiedShuffleSplit,
+    train_test_split,
+)
 
 from data.CustomDataset import CustomDataset
 
@@ -37,18 +41,30 @@ class DataManager:
     ):
         # Split data into train and test sets
         test_data = data_df.iloc[test_index]
-        train_data = data_df.iloc[train_index]
+        train_val_data = data_df.iloc[train_index]
 
         # Split train data into train and validation sets
         # Calculate the actual validation size based on the remaining data
         # val size is given as a percentage to the total data and
         # thus has to be scaled
         val_split_size_normalized = val_size / (1 - len(test_index) / data_df.shape[0])
-        train_data, val_data = train_test_split(
-            train_data,
+
+        # Separate features and target
+        X_train = train_val_data.drop(columns=[target])
+        y_train = train_val_data[target]
+
+        # Implement stratified train-val split
+        strat_shuffle_split = StratifiedShuffleSplit(
+            n_splits=1,
             test_size=val_split_size_normalized,
             random_state=random_state,
         )
+
+        train_indices, val_indices = next(strat_shuffle_split.split(X_train, y_train))
+
+        # Create train and validation sets
+        train_data = train_val_data.iloc[train_indices]
+        val_data = train_val_data.iloc[val_indices]
 
         return {
             "train": CustomDataset(train_data, target, name),
@@ -102,7 +118,7 @@ class DataManager:
                                 target=target,
                                 name=name,
                                 random_state=random_state,
-                            )
+                            ),
                         )
         else:
             # Initialize StratifiedKFold
@@ -127,7 +143,7 @@ class DataManager:
                         target=target,
                         name=name,
                         random_state=random_state,
-                    )
+                    ),
                 )
 
         return datasets

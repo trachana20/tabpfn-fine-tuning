@@ -28,7 +28,7 @@ setup_config = {
     "random_states": [0, 1],
     "k_folds": 5,
     # val_size is percentage w.r.t. the total dataset-rows ]0,1[
-    "val_size": 0.25,
+    "val_size": 0.2,
     "num_workers": 0,
     "dataset_mapping": {168746: "Titanic", 9982: "Dress-Sales"},
     "log_wandb": False,
@@ -45,10 +45,15 @@ setup_config = {
 
 # Step 1: Define the model, criterion, optimizer, device and evaluator
 modelkwargs_dict = {
+    # key: finetune models have to start with FineTuneTabPFNClassifier...
     "FineTuneTabPFNClassifier_full_weight": {
         "architectural": {
+            # finetune models need a normal TabPFNClassifier instance
             "tabpfn_classifier": TabPFNClassifier(),
+            # weights_path is the location from where the model is loaded if path exists
+            # or if not exists where the weights are stored in
             "weights_path": "model_weights/FullWeightFineTuneTabPFN.pth",
+            # fine_tune_type determines the fine-tuning function, to be used
             "fine_tune_type": "full_weight_fine_tuning",
         },
         "training": {

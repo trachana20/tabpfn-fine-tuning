@@ -10,7 +10,6 @@ class FineTuneTabPFNClassifier:
         self.tabpfn_classifier = tabpfn_classifier
         self.path = weights_path
 
-        # fine_tuned_model = load_model_only_inference(path)
         fine_tuned_model = MockTabPFN(tabpfn_classifier=tabpfn_classifier)
 
         # just swap out the self.model of the tabpfn_classifier with the new model
