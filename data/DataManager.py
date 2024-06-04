@@ -66,11 +66,7 @@ class DataManager:
         train_data = train_val_data.iloc[train_indices]
         val_data = train_val_data.iloc[val_indices]
 
-        return {
-            "train": CustomDataset(train_data, target, name),
-            "test": CustomDataset(test_data, target, name),
-            "val": CustomDataset(val_data, target, name),
-        }
+        return train_data, val_data, test_data
 
     # ----- ----- ----- ----- ----- create k-fold splits (strategy: StratifiedKFold)
     def k_fold_train_test_split(self, k_folds, val_size, random_state):
@@ -90,13 +86,6 @@ class DataManager:
             dataset_format="dataframe",
         )
 
-        data_df = self.preprocessor.preprocess(
-            data_df,
-            target,
-            categorical_indicator,
-            attribute_names,
-        )
-
         # List to store datasets
         datasets = []
 
@@ -109,7 +98,7 @@ class DataManager:
                         split = task_splits.get(repeat=repeat, fold=fold, sample=sample)
 
                         # Create CustomDataset instances and append to datasets list
-                        datasets.append(
+                        train_data, val_data, test_data = (
                             self.split_train_test_validation(
                                 data_df=data_df,
                                 test_index=split.test,
@@ -118,7 +107,23 @@ class DataManager:
                                 target=target,
                                 name=name,
                                 random_state=random_state,
-                            ),
+                            )
+                        )
+                        train_data, val_data, test_data = self.preprocessor.preprocess(
+                            train_data=train_data,
+                            val_data=val_data,
+                            test_data=test_data,
+                            target=target,
+                            categorical_indicator=categorical_indicator,
+                            attribute_names=attribute_names,
+                        )
+
+                        datasets.append(
+                            {
+                                "train": CustomDataset(train_data, target, name),
+                                "val": CustomDataset(val_data, target, name),
+                                "test": CustomDataset(test_data, target, name),
+                            },
                         )
         else:
             # Initialize StratifiedKFold
@@ -134,16 +139,30 @@ class DataManager:
             # Iterate through StratifiedKFold splits
             for train_index, test_index in kf.split(x_data, y_data):
                 # Create CustomDataset instances and append to datasets list
+                train_data, val_data, test_data = self.split_train_test_validation(
+                    data_df=data_df,
+                    test_index=test_index,
+                    train_index=train_index,
+                    val_size=val_size,
+                    target=target,
+                    name=name,
+                    random_state=random_state,
+                )
+                train_data, val_data, test_data = self.preprocessor.preprocess(
+                    train_data=train_data,
+                    val_data=val_data,
+                    test_data=test_data,
+                    target=target,
+                    categorical_indicator=categorical_indicator,
+                    attribute_names=attribute_names,
+                )
+
                 datasets.append(
-                    self.split_train_test_validation(
-                        data_df=data_df,
-                        test_index=test_index,
-                        train_index=train_index,
-                        val_size=val_size,
-                        target=target,
-                        name=name,
-                        random_state=random_state,
-                    ),
+                    {
+                        "train": CustomDataset(train_data, target, name),
+                        "val": CustomDataset(val_data, target, name),
+                        "test": CustomDataset(test_data, target, name),
+                    },
                 )
 
         return datasets

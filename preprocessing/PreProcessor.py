@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 from pandas import DataFrame
-from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import (
     LabelEncoder,
-    OneHotEncoder,
     PowerTransformer,
+    QuantileTransformer,
     StandardScaler,
 )
 
@@ -26,189 +26,380 @@ class PreProcessor:
 
     def preprocess(
         self,
-        data_df: DataFrame,
+        train_data,
+        val_data,
+        test_data,
         target: str,
         categorical_indicator: list,
         attribute_names: list,
     ):
         # Drop rows where target is missing, because we can't learn from them
-        data_df = self.drop_row_where_taget_is_missing(data_df, target)
+        train_data, val_data, test_data = self.drop_row_where_taget_is_missing(
+            train_data=train_data,
+            val_data=val_data,
+            test_data=test_data,
+            target=target,
+        )
 
-        # Split data into features and target
-        x_data = data_df.drop(columns=[target])
-        target_data = data_df[target]
-        target_data = self.target_encoder(target_data)
+        train_data, val_data, test_data = target_data = self.target_encoder(
+            train_data=train_data,
+            val_data=val_data,
+            test_data=test_data,
+            target=target,
+        )
 
         # Get categorical and numerical features using list comprehension and zip
         categorical_features, numerical_features = (
             self.get_categorical_and_numerical_features(
-                data=data_df,
+                train_data=train_data,
                 categorical_indicator=categorical_indicator,
                 attribute_names=attribute_names,
                 target=target,
             )
         )
+        train_data, val_data, test_data = self.drop_constant_categorical_features(
+            train_data=train_data,
+            val_data=val_data,
+            test_data=test_data,
+            categorical_features=categorical_features,
+        )
 
+        train_data, val_data, test_data = self.drop_all_unique_categorical_features(
+            train_data=train_data,
+            val_data=val_data,
+            test_data=test_data,
+            categorical_features=categorical_features,
+        )
+
+        train_data, val_data, test_data = self.impute_missing_values(
+            train_data=train_data,
+            val_data=val_data,
+            test_data=test_data,
+            categorical_features=categorical_features,
+            numerical_features=numerical_features,
+        )
         # Preprocess data with missing values, encoding, outliers, and scaling
-        x_data = self.encode_categorical(x_data, categorical_features)
+        train_data, val_data, test_data = self.encode_categorical(
+            train_data=train_data,
+            val_data=val_data,
+            test_data=test_data,
+            categorical_features=categorical_features,
+        )
 
-        x_data = self.impute_missing_values(
-            data=x_data,
+        train_data, val_data, test_data = self.handle_outliers(
+            train_data=train_data,
+            val_data=val_data,
+            test_data=test_data,
             categorical_features=categorical_features,
             numerical_features=numerical_features,
         )
 
-        x_data = self.handle_outliers(
-            x_data,
-            categorical_features,
-            numerical_features,
+        train_data, val_data, test_data = self.scale(
+            train_data=train_data,
+            val_data=val_data,
+            test_data=test_data,
         )
-
-        x_data = self.scale(x_data)
 
         # Apply data transformations
-        x_data = self._data_transformations(
-            x_data,
-            numerical_features,
+        train_data, val_data, test_data = self._data_transformations(
+            train_data=train_data,
+            val_data=val_data,
+            test_data=test_data,
+            numerical_features=numerical_features,
         )
-        target_data = pd.DataFrame({target: target_data})
-        return pd.concat([x_data, target_data], axis=1)
+        return train_data, val_data, test_data
 
-    def target_encoder(self, target):
+    def target_encoder(self, train_data, val_data, test_data, target):
+        # encodes the target column to a numerical datatype
         encoder = LabelEncoder()
-        return encoder.fit_transform(target)
+        train_data[target] = encoder.fit_transform(train_data[target])
+        # apply transformation on val_data and test_data
+        val_data[target] = encoder.transform(val_data[target])
+        test_data[target] = encoder.transform(test_data[target])
+        return train_data, val_data, test_data
 
-    def drop_row_where_taget_is_missing(self, data, target):
-        return data.dropna(subset=[target])
+    def drop_row_where_taget_is_missing(self, train_data, val_data, test_data, target):
+        train_data = train_data.dropna(subset=[target])
+        val_data = val_data.dropna(subset=[target])
+        test_data = test_data.dropna(subset=[target])
+        return train_data, val_data, test_data
+
+    def drop_constant_categorical_features(
+        self,
+        train_data,
+        val_data,
+        test_data,
+        categorical_features,
+    ):
+        for cat_feature in categorical_features:
+            # Check if the feature has more than one unique value in the training data
+            num_unique = train_data[cat_feature].nunique()
+
+            # If the feature is constant in the training data, drop it from all datasets
+            if num_unique == 1:
+                train_data = train_data.drop(columns=[cat_feature])
+                val_data = val_data.drop(columns=[cat_feature])
+                test_data = test_data.drop(columns=[cat_feature])
+
+        return train_data, val_data, test_data
+
+    def drop_all_unique_categorical_features(
+        self,
+        train_data,
+        val_data,
+        test_data,
+        categorical_features,
+    ):
+        for cat_feature in categorical_features[:]:
+            num_unique_values = train_data[cat_feature].nunique()
+            len_data = len(train_data)
+            # drop if more than 95% are unique values
+            if num_unique_values >= len_data * 0.95:
+                train_data = train_data.drop(columns=[cat_feature])
+                val_data = val_data.drop(columns=[cat_feature])
+                test_data = test_data.drop(columns=[cat_feature])
+                categorical_features.remove(cat_feature)
+
+        return train_data, val_data, test_data
 
     def get_categorical_and_numerical_features(
         self,
-        data,
+        train_data,
         categorical_indicator,
         attribute_names,
         target,
     ):
         # Get categorical and numerical features using list comprehension and zip
-        categorical_features = [
+        categorical_features = {
             name
-            for indicator, name in zip(categorical_indicator, attribute_names)
+            for indicator, name in zip(
+                categorical_indicator,
+                attribute_names,
+                strict=False,
+            )
             if indicator and name != target
-        ]
-        numerical_features = [
+        }
+        numerical_features = {
             name
-            for indicator, name in zip(categorical_indicator, attribute_names)
+            for indicator, name in zip(
+                categorical_indicator,
+                attribute_names,
+                strict=False,
+            )
             if not indicator and name != target
-        ]
+        }
+        # the OpenML categorical indicator is not very accuracte:
+        # e.g: the "ticket" column in the titanic ds is marked as numerical
+        # but contains both
         # get non-numerical datatypes because for some reason
         # the openml categorical_features are not including strings etc
         # append to categorical features
 
-        for column in data.columns:
-            if not pd.api.types.is_numeric_dtype(data[column]) and column != target:
-                categorical_features.append(column)
+        # assume that train_data has the same columns as val_data and test_data
+        for column in train_data.columns:
+            if column == target:
+                continue
+            if not pd.api.types.is_numeric_dtype(train_data[column]):
+                # Not Numeric
+                categorical_features.add(column)
+                numerical_features.discard(column)
+            else:
+                # Numeric
+                numerical_features.add(column)
+                categorical_features.discard(column)
 
-        return categorical_features, numerical_features
+        # convert list -> set -> list so that we eliminate duplicates
+        return list(categorical_features), list(numerical_features)
 
-    def impute_missing_values(self, data, categorical_features, numerical_features):
-        """Impute missing values in the provided data.
-
-        Parameters:
-        - data: DataFrame, the dataset containing missing values.
-        - categorical_features: list of str, names of categorical features.
-        - numerical_features: list of str, names of numerical features.
-
-        Returns:
-        - DataFrame, dataset with missing values imputed.
-        """
-        # Handle missing values for numerical features
-        numerical_data = data[numerical_features]
-        imputer_num = SimpleImputer(strategy="mean")
-        numerical_data_imputed = imputer_num.fit_transform(numerical_data)
-
-        # Handle missing values for categorical features
-        categorical_data = data[categorical_features]
-        imputer_cat = SimpleImputer(strategy="most_frequent")
-        categorical_data_imputed = imputer_cat.fit_transform(categorical_data)
-
-        # Convert back to DataFrame
-        numerical_df = pd.DataFrame(numerical_data_imputed, columns=numerical_features)
-        categorical_df = pd.DataFrame(
-            categorical_data_imputed,
-            columns=categorical_features,
-        )
-
-        # Concatenate numerical and categorical DataFrames
-        data_imputed = pd.concat([numerical_df, categorical_df], axis=1)
-
-        return data_imputed
-
-    def handle_outliers(
+    def impute_missing_values(
         self,
-        data,
+        train_data,
+        val_data,
+        test_data,
         categorical_features,
         numerical_features,
     ):
-        # Handle outliers (you can implement your logic here)
-        # TODO: Implement outlier handling
-        return data
+        # Handle missing values for numerical features with mean imputation
 
-    def scale(self, data):
+        for num_feature in numerical_features:
+            train_data[num_feature] = pd.to_numeric(
+                train_data[num_feature],
+                errors="coerce",
+            )
+
+            val_data[num_feature] = pd.to_numeric(
+                val_data[num_feature],
+                errors="coerce",
+            )
+            test_data[num_feature] = pd.to_numeric(
+                test_data[num_feature],
+                errors="coerce",
+            )
+
+            if pd.api.types.is_float_dtype(train_data[num_feature]):
+                # float -> mean
+                fill_metric = train_data[num_feature].mean()
+            else:
+                # non floating point(int, etc..) -> mode
+                fill_metric = train_data[num_feature].mode()
+
+            train_data[num_feature] = train_data[num_feature].fillna(fill_metric)
+
+        # Handle missing values for categorical features
+        for cat_features in categorical_features:
+            most_frequent = train_data[cat_features].mode().iloc[0]
+
+            train_data[cat_features] = train_data[cat_features].fillna(most_frequent)
+            val_data[cat_features] = val_data[cat_features].fillna(most_frequent)
+            test_data[cat_features] = test_data[cat_features].fillna(most_frequent)
+
+        return train_data, val_data, test_data
+
+    def handle_outliers(
+        self,
+        train_data,
+        val_data,
+        test_data,
+        categorical_features,
+        numerical_features,
+    ):
+        # Calculate mean and std deviation for each numerical feature using train data
+        means = train_data[numerical_features].mean()
+        std_devs = train_data[numerical_features].std()
+
+        def remove_outliers(df, means, std_devs, numerical_features):
+            # Calculate z-scores using the training data statistics
+            z_scores = (df[numerical_features] - means) / std_devs
+            # Determine outliers (z-score > 3 or z-score < -3)
+            outliers = np.abs(z_scores) > 3
+            # Remove outliers
+            non_outliers = ~outliers
+            # Keep rows that are not outliers in any numerical feature
+            return df[non_outliers.all(axis=1)]
+
+        # Remove outliers from train, val, and test data
+        train_data = remove_outliers(train_data, means, std_devs, numerical_features)
+        val_data = remove_outliers(val_data, means, std_devs, numerical_features)
+        test_data = remove_outliers(test_data, means, std_devs, numerical_features)
+
+        return train_data, val_data, test_data
+
+    def scale(self, train_data, val_data, test_data):
         # Scale data
         scaler = StandardScaler()
-        data_scaled = scaler.fit_transform(data)
-        return DataFrame(data_scaled, columns=data.columns)
+
+        for col in train_data.columns:
+            # Reshape the data to 2D for StandardScaler
+            train_data[col] = scaler.fit_transform(train_data[[col]]).flatten()
+
+            # Transform the validation and test data using the same scaler
+            val_data[col] = scaler.transform(val_data[[col]]).flatten()
+            test_data[col] = scaler.transform(test_data[[col]]).flatten()
+        return train_data, val_data, test_data
 
     def _ordinal_encode(
         self,
-        data,
+        train_data,
+        val_data,
+        test_data,
         categorical_features,
     ):
+        # Function to handle unseen categories
+        def transform_with_unseen_handling(data, column, le):
+            known_categories = set(le.classes_)
+            transformed = []
+
+            for item in data[column]:
+                if item in known_categories:
+                    transformed.append(le.transform([item])[0])
+                else:
+                    # Handle unseen category, e.g., assigning -1 or next integer value
+                    ## or len(le.classes_) if you want to use a new category
+                    transformed.append(-1)
+
+            return np.array(transformed)
+
+        # Encoder initialization and fitting on training data
         encoder = LabelEncoder()
+
         for feature in categorical_features:
-            data[feature] = encoder.fit_transform(data[feature])
-        return data
+            # fit and apply encoder to the train data
+            encoder.fit(train_data[feature])
+            train_data.loc[:, feature] = encoder.transform(train_data.loc[:, feature])
+
+            # apply the fitted encoder to val_data and test_data
+            # handle case if category is not represented in train data but in test or val
+            val_data.loc[:, feature] = transform_with_unseen_handling(
+                data=val_data,
+                column=feature,
+                le=encoder,
+            )
+            test_data.loc[:, feature] = transform_with_unseen_handling(
+                data=test_data,
+                column=feature,
+                le=encoder,
+            )
+
+        return train_data, val_data, test_data
 
     def _one_hot_encode(
         self,
-        data,
+        train_data,
+        val_data,
+        test_data,
         categorical_features,
     ):
-        encoder = OneHotEncoder(sparse=False)
-        one_hot_encoded = encoder.fit_transform(data[categorical_features])
-        data = data.drop(columns=categorical_features)
-        one_hot_df = pd.DataFrame(
-            one_hot_encoded,
-            columns=encoder.get_feature_names_out(categorical_features),
-            index=data.index,
-        )
-        return pd.concat([data, one_hot_df], axis=1)
+        pass
 
     def encode_categorical(
         self,
-        data,
+        train_data,
+        val_data,
+        test_data,
         categorical_features,
     ):
         if self.encode_categorical_type == "ordinal":
-            data = self._ordinal_encode(
-                data,
-                categorical_features,
+            return self._ordinal_encode(
+                train_data=train_data,
+                val_data=val_data,
+                test_data=test_data,
+                categorical_features=categorical_features,
             )
         elif self.encode_categorical_type == "one-hot":
-            data = self._one_hot_encode(
-                data,
-                categorical_features,
+            return self._one_hot_encode(
+                train_data=train_data,
+                val_data=val_data,
+                test_data=test_data,
+                categorical_features=categorical_features,
             )
         else:
             raise ValueError("Invalid categorical encoder type")
-        return data
 
-    def _data_transformations(self, data, numerical_features):
+    def _data_transformations(
+        self,
+        train_data,
+        val_data,
+        test_data,
+        numerical_features,
+    ):
         if self.data_tranformer_type == "power_transform":
             pt = PowerTransformer()
-            data[numerical_features] = pt.fit_transform(data[numerical_features])
+
+            train_data[numerical_features] = pt.fit_transform(
+                train_data[numerical_features]
+            )
+            val_data[numerical_features] = pt.transform(val_data[numerical_features])
+            test_data[numerical_features] = pt.transform(test_data[numerical_features])
+
         elif self.data_tranformer_type == "quantile_transform":
-            # Apply quantile transformation or other appropriate transformation
-            pass
+            qt = QuantileTransformer(output_distribution="normal")
+
+            train_data[numerical_features] = qt.fit_transform(
+                train_data[numerical_features]
+            )
+            val_data[numerical_features] = qt.transform(val_data[numerical_features])
+            test_data[numerical_features] = qt.transform(test_data[numerical_features])
+
         else:
             raise ValueError("Invalid data transformer type")
-        return data
+        return train_data, val_data, test_data
