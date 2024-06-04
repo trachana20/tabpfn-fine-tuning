@@ -41,7 +41,7 @@ class PreProcessor:
             target=target,
         )
 
-        train_data, val_data, test_data = target_data = self.target_encoder(
+        train_data, val_data, test_data = self.target_encoder(
             train_data=train_data,
             val_data=val_data,
             test_data=test_data,
@@ -98,6 +98,7 @@ class PreProcessor:
             train_data=train_data,
             val_data=val_data,
             test_data=test_data,
+            target=target,
         )
 
         # Apply data transformations
@@ -284,17 +285,29 @@ class PreProcessor:
 
         return train_data, val_data, test_data
 
-    def scale(self, train_data, val_data, test_data):
+    def scale(self, train_data, val_data, test_data, target):
         # Scale data
         scaler = StandardScaler()
 
-        for col in train_data.columns:
+        columns = list(train_data.columns)
+        columns.remove(target)
+        for col in columns:
             # Reshape the data to 2D for StandardScaler
-            train_data[col] = scaler.fit_transform(train_data[[col]]).flatten()
+            train_data[col] = pd.Series(
+                scaler.fit_transform(train_data[[col]]).flatten(),
+                index=train_data.index,
+            )
 
             # Transform the validation and test data using the same scaler
-            val_data[col] = scaler.transform(val_data[[col]]).flatten()
-            test_data[col] = scaler.transform(test_data[[col]]).flatten()
+            val_data[col] = pd.Series(
+                scaler.transform(val_data[[col]]).flatten(),
+                index=val_data.index,
+            )
+            test_data[col] = pd.Series(
+                scaler.transform(test_data[[col]]).flatten(),
+                index=test_data.index,
+            )
+
         return train_data, val_data, test_data
 
     def _ordinal_encode(

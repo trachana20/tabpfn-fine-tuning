@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 import torch
-from data.CustomDataloader import CustomDataLoader
 from data.DataManager import DataManager
 from gym.Evaluator import Evaluator
 from gym.Trainer import Trainer
@@ -18,6 +17,7 @@ from tabpfn import TabPFNClassifier
 from torch.nn import CrossEntropyLoss
 from torch.optim import Adam
 from utils import set_seed_globally
+from torch.utils.data import DataLoader
 
 # Step 0: Define hyperparameters which are valid for all models and model
 # specific hyperparameters
@@ -58,6 +58,7 @@ modelkwargs_dict = {
         },
         "training": {
             "epochs": 10,
+            "batch_size": 16,
             "learning_rate": 0.000001,
             "criterion": CrossEntropyLoss,
             "optimizer": Adam,
@@ -125,17 +126,17 @@ else:
                     # if the model is a fine-tuning model, we need to fine-tune the model
                     if "FineTuneTabPFNClassifier" in model_name:
                         model = trainer.fine_tune_model(
-                            train_loader=CustomDataLoader(
+                            train_loader=DataLoader(
                                 dataset=train_dataset,
-                                sequence_length=train_dataset.number_rows,
                                 shuffle=True,
                                 num_workers=0,
+                                batch_size=model_training_kwargs.get("batch_size", 16),
                             ),
-                            val_loader=CustomDataLoader(
+                            val_loader=DataLoader(
                                 dataset=val_dataset,
-                                sequence_length=val_dataset.number_rows,
                                 shuffle=True,
                                 num_workers=0,
+                                batch_size=model_training_kwargs.get("batch_size", 16),
                             ),
                             fine_tune_type=model_architectural_kwargs["fine_tune_type"],
                             device=setup_config["device"],

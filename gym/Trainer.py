@@ -9,8 +9,6 @@ from models.FineTuneTabPFNClassifier import FineTuneTabPFNClassifier
 from sklearn.metrics import accuracy_score, roc_auc_score
 from torch import nn
 
-if TYPE_CHECKING:
-    from data.CustomDataloader import CustomDataLoader
 from pathlib import Path
 
 
@@ -65,8 +63,8 @@ class Trainer:
     def full_weight_fine_tuning(
         self,
         tabpfn_classifier,
-        train_loader: CustomDataLoader,
-        val_loader: CustomDataLoader,
+        train_loader,
+        val_loader,
         weights_path,
         architectural,
         training,
@@ -88,9 +86,7 @@ class Trainer:
         for _epoch_i in range(training["epochs"]):
             epoch_loss = 0.0  # initialize epoch loss
             num_batches = len(train_loader)
-            for _batch_i, (x, y) in enumerate(
-                train_loader,
-            ):
+            for _batch_i, (x, y) in enumerate(train_loader):
                 optimizer.zero_grad()
 
                 single_eval_pos = x.shape[0] // 2
