@@ -7,6 +7,8 @@ import pandas as pd
 import seaborn as sns
 import torch
 from data.DataManager import DataManager
+from data.FullRealDataDataset import FullRealDataDataset
+from data.RealDataDataset import RealDataDataset
 from gym.Evaluator import Evaluator
 from gym.Trainer import Trainer
 from logger.Logger import Logger
@@ -38,6 +40,7 @@ setup_config = {
         "DecisionTreeClassifier": DecisionTreeClassifier,
         "TabPFNClassifier": TabPFNClassifier,
     },
+    "dataset_augmentations": [FullRealDataDataset],
     "device": "cuda" if torch.cuda.is_available() else "cpu",
 }
 # Create a lookup dictionary which contains the architectural and training
@@ -105,9 +108,9 @@ else:
 
             # ---------- ---------- ---------- ---------- ----------  FOLD LOOP
             for fold_i, fold in enumerate(data_k_folded):
-                train_dataset = fold["train"]
-                val_dataset = fold["val"]
-                test_dataset = fold["test"]
+                train_data = fold["train"]
+                val_data = fold["val"]
+                test_data = fold["test"]
 
                 # iterate over all models and train on fold
                 # ---------- ---------- ---------- ---------- ----------  MODEL LOOP
@@ -124,40 +127,62 @@ else:
                         {},
                     )
                     # if the model is a fine-tuning model, we need to fine-tune the model
-                    if "FineTuneTabPFNClassifier" in model_name:
-                        model = trainer.fine_tune_model(
-                            train_loader=DataLoader(
-                                dataset=train_dataset,
-                                shuffle=True,
-                                num_workers=0,
-                                batch_size=model_training_kwargs.get("batch_size", 16),
-                            ),
-                            val_loader=DataLoader(
-                                dataset=val_dataset,
-                                shuffle=True,
-                                num_workers=0,
-                                batch_size=model_training_kwargs.get("batch_size", 16),
-                            ),
-                            fine_tune_type=model_architectural_kwargs["fine_tune_type"],
-                            device=setup_config["device"],
-                            **modelkwargs_dict.get(model_name, {}),
+                    # iterate over all the different dataset types
+                    for data_augmentation in setup_config["dataset_augmentations"]:
+                        # depending on the setting we augment the training data via
+                        # different methods
+                        train_dataset = data_augmentation(
+                            data=train_data["data"],
+                            target=train_data["target"],
+                            name=train_data["name"],
                         )
-                    else:
+                        # validation and test data is never augmented
+
+                        val_dataset = RealDataDataset(
+                            data=val_data["data"],
+                            target=val_data["target"],
+                            name=val_data["name"],
+                        )
+
+                        test_dataset = RealDataDataset(
+                            data=test_data["data"],
+                            target=test_data["target"],
+                            name=test_data["name"],
+                        )
+
+                        if "FineTuneTabPFNClassifier" in model_name:
+                            model = trainer.fine_tune_model(
+                                train_loader=DataLoader(
+                                    dataset=train_dataset,
+                                    shuffle=True,
+                                    num_workers=0,
+                                    batch_size=model_training_kwargs.get(
+                                        "batch_size",
+                                        16,
+                                    ),
+                                ),
+                                val_dataset=val_dataset,
+                                fine_tune_type=model_architectural_kwargs[
+                                    "fine_tune_type"
+                                ],
+                                device=setup_config["device"],
+                                **modelkwargs_dict.get(model_name, {}),
+                            )
                         # create a model which uses modelkwargs
                         model = model_fn(**model_architectural_kwargs)
 
-                    # evaluate the model given the right setting
-                    trained_model, performance_metrics = (
-                        evaluator.fit_and_predict_model(
-                            model=model,
-                            train_dataset=train_dataset,
-                            val_dataset=val_dataset,
-                            random_state=random_state,
-                            dataset_id=dataset_id,
-                            fold_i=fold_i,
-                            **model_training_kwargs,
+                        # evaluate the model given the right setting
+                        trained_model, performance_metrics = (
+                            evaluator.fit_and_predict_model(
+                                model=model,
+                                train_dataset=train_dataset,
+                                test_dataset=test_dataset,
+                                random_state=random_state,
+                                dataset_id=dataset_id,
+                                fold_i=fold_i,
+                                **model_training_kwargs,
+                            )
                         )
-                    )
 
                     # add settings to performance metrics dictionary
                     performance_metrics.update(

@@ -4,7 +4,7 @@ import numpy as np
 from torch.utils.data import Dataset
 
 
-class RealDataDataset(Dataset):
+class FullRealDataDataset(Dataset):
     def __init__(self, data, target, name):
         self.name = name
         self.number_rows = len(data)
@@ -15,10 +15,13 @@ class RealDataDataset(Dataset):
         self.num_classes = np.unique(self.labels).shape[0]
 
     def __len__(self):
-        return len(self.features)
+        # as we return the complete dataset, we
+        # will only iterate once over the dataloader
+        return 1
 
     def __getitem__(self, idx):
         # ignore idx
-        # we want to shuffle the dataset
+        # we want to shuffle the dataset and return all rows
+        # and all features for finetuning
         perm_indices = np.random.permutation(self.number_rows)
         return self.features[perm_indices], self.labels[perm_indices]

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from collections import defaultdict
 from pathlib import Path
 
@@ -7,9 +8,9 @@ import numpy as np
 import torch
 from evaluation.model_evaluation import classification_performance_metrics
 from gym.utils import (
+    average_epoch_metrics,
     to_numpy,
     update_epoch_metrics_with_batch_metrics,
-    average_epoch_metrics,
 )
 from models.FineTuneTabPFNClassifier import FineTuneTabPFNClassifier
 from sklearn.metrics import accuracy_score, roc_auc_score
@@ -26,7 +27,7 @@ class Trainer:
     def fine_tune_model(
         self,
         train_loader,
-        val_loader,
+        val_dataset,
         fine_tune_type,
         device,
         **kwargs,
@@ -53,7 +54,7 @@ class Trainer:
             return self.full_weight_fine_tuning(
                 tabpfn_classifier=tabpfn_classifier,
                 train_loader=train_loader,
-                val_loader=val_loader,
+                val_dataset=val_dataset,
                 weights_path=weights_path,
                 device=device,
                 **kwargs,
@@ -68,7 +69,7 @@ class Trainer:
         self,
         tabpfn_classifier,
         train_loader,
-        val_loader,
+        val_dataset,
         weights_path,
         architectural,
         training,
@@ -140,85 +141,58 @@ class Trainer:
                 )
 
             # aggregate over batches and visualize metrics
-            averaged_epoch_metrics = average_epoch_metrics(epoch_metrics=epoch_metrics)
+            average_epoch_metrics(epoch_metrics=epoch_metrics)
 
-            # TODO vall visualization
+            # TODO call visualization
 
             # Call validation function after each epoch
             with torch.no_grad():
                 self.model_validation(
                     tabpfn_classifier=tabpfn_classifier,
                     tabpfn_model=tabpfn_model,
-                    val_loader=val_loader,
+                    val_dataset=val_dataset,
                 )
 
-            # metrics = {**training_metrics, **evaluation_metrics}
-            # if self.logger is not None:
-            #     # log metrics to wandb
-            #     self.logger.update_traing_metrics(metrics, step=_epoch_i)
+            # TODO  implement early validation stopping!
 
         self._store_model_weights(tabpfn_model.state_dict(), weights_path)
         tabpfn_model.eval()
         return tabpfn_classifier
 
-    def model_validation(self, tabpfn_classifier, tabpfn_model, val_loader):
-        metrics = []
+    def model_validation(self, tabpfn_classifier, tabpfn_model, val_dataset):
+        # for the validation we insert the nn.Module back into the tabpfnclassifier
+        # instance so we mimic the exact way that TabPFN does predictions
+        # (pre-processing, softmax temperature, etc.)
+        tabpfn_classifier.model = (None, None, tabpfn_model)
 
-        with torch.no_grad():
-            for _batch_i, (x, y) in enumerate(val_loader):
-                tabpfn_classifier.model = (None, None, tabpfn_model)
+        single_eval_pos = int(2 / 3 * val_dataset.number_rows)
 
-                single_eval_pos = x.shape[0] // 2
-                x_train_val = x[:single_eval_pos]
-                y_train_val = y[:single_eval_pos]
-                x_query_val = x[single_eval_pos:]
-                y_query_val = y[single_eval_pos:]
+        # for the proper evaluation we also use numpy arrays instead
+        # of tensors. 1. we don't run into the risk of updating weights
+        # accidentally and we mimic again the later use-case
 
-                tabpfn_classifier.fit(x_train_val, y_train_val)
-                y_preds = tabpfn_classifier.predict_proba(x_query_val)
+        x_train = val_dataset.features[:single_eval_pos]
+        y_train = val_dataset.labels[:single_eval_pos]
+        x_query = val_dataset.features[single_eval_pos:]
+        y_true = val_dataset.labels[single_eval_pos:]
 
-                batch_metrics = self.compute_metrics(
-                    y_query_val,
-                    y_preds,
-                    val_loader.dataset.name,
-                )
-                metrics.append(batch_metrics)
+        start_time = time.time()
+        tabpfn_classifier.fit(x_train, y_train)
+        fitting_time = time.time() - start_time
 
-            # if needed aggregate over batches
-            if len(metrics):
-                metrics_temp = defaultdict(float)
-                for metric in metrics:
-                    for metric_key, metric_value in metric.items():
-                        metrics_temp[metric_key] += metric_value
+        start_time = time.time()
+        y_preds = tabpfn_classifier.predict_proba(x_query)
+        prediction_time = time.time()
 
-                metrics = dict(metrics_temp)
-        return metrics
+        # for this evaluation we do not need to convert to numpy
+        # arrays as the predictions are returned as numpy arrays
+        val_metrics = classification_performance_metrics(
+            y_preds=y_preds,
+            y_true=y_true,
+        )
 
-    def compute_metrics(self, y_true, y_preds_probs, dataset_name):
-        metrics = {}
+        # enrich validation metrics with additional information
+        val_metrics["fitting_time"] = fitting_time
+        val_metrics["prediction_time"] = prediction_time
 
-        y_preds_argmax = y_preds_probs.argmax(axis=-1)
-        y_true_shape = np.unique(y_true).shape[0]
-        prediction_shape = np.unique(y_preds_argmax).shape[0]
-
-        # Accuracy
-        accuracy = accuracy_score(y_true, y_preds_argmax)
-        metrics[f"{dataset_name}/accuracy"] = accuracy
-
-        is_binary = y_preds_probs.shape[-1] == 2
-
-        if y_true_shape == prediction_shape:
-            try:
-                if is_binary:
-                    auc = roc_auc_score(y_true, y_preds_argmax)
-                else:
-                    auc = roc_auc_score(
-                        y_true,
-                        y_preds_probs,
-                        multi_class="ovr",
-                        average="macro",
-                    )
-                metrics[f"{dataset_name}/auc"] = auc
-            except ValueError:
-                pass
-        return metrics
+        return val_metrics

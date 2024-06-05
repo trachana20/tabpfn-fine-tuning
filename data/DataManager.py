@@ -13,7 +13,7 @@ from sklearn.model_selection import (
     train_test_split,
 )
 
-from data.CustomDataset import RealDataDataset
+from data.FullRealDataDataset import FullRealDataDataset
 
 
 class DataManager:
@@ -120,9 +120,21 @@ class DataManager:
 
                         datasets.append(
                             {
-                                "train": RealDataDataset(train_data, target, name),
-                                "val": RealDataDataset(val_data, target, name),
-                                "test": RealDataDataset(test_data, target, name),
+                                "train": {
+                                    "data": train_data,
+                                    "target": target,
+                                    "name": name,
+                                },
+                                "val": {
+                                    "data": val_data,
+                                    "target": target,
+                                    "name": name,
+                                },
+                                "test": {
+                                    "data": test_data,
+                                    "target": target,
+                                    "name": name,
+                                },
                             },
                         )
         else:
@@ -159,9 +171,9 @@ class DataManager:
 
                 datasets.append(
                     {
-                        "train": RealDataDataset(train_data, target, name),
-                        "val": RealDataDataset(val_data, target, name),
-                        "test": RealDataDataset(test_data, target, name),
+                        "train": {"data": train_data, "target": target, "name": name},
+                        "val": {"data": val_data, "target": target, "name": name},
+                        "test": {"data": test_data, "target": target, "name": name},
                     },
                 )
 
