@@ -41,7 +41,7 @@ def classification_performance_metrics(y_preds, y_true):
 
     # Compute AUC (Area Under Curve)
 
-    auc = auc_metric(target=y_true, pred=y_preds)
+    auc = auc_metric(target=y_true, pred=y_preds).item()
     metrics_dict["auc"] = auc
 
     # Compute F1 score

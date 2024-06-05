@@ -40,7 +40,7 @@ setup_config = {
         "DecisionTreeClassifier": DecisionTreeClassifier,
         "TabPFNClassifier": TabPFNClassifier,
     },
-    "dataset_augmentations": [FullRealDataDataset],
+    "dataset_augmentations": {"FullRealDataDataset": FullRealDataDataset},
     "device": "cuda" if torch.cuda.is_available() else "cpu",
 }
 # Create a lookup dictionary which contains the architectural and training
@@ -62,9 +62,10 @@ modelkwargs_dict = {
         "training": {
             "epochs": 10,
             "batch_size": 1,
-            "learning_rate": 0.000001,
+            "learning_rate": 1e-6,
             "criterion": CrossEntropyLoss,
             "optimizer": Adam,
+            "early_stopping_threshold": 0.1,
         },
     },
 }
@@ -126,31 +127,38 @@ else:
                         "training",
                         {},
                     )
-                    # if the model is a fine-tuning model, we need to fine-tune the model
-                    # iterate over all the different dataset types
-                    for data_augmentation in setup_config["dataset_augmentations"]:
-                        # depending on the setting we augment the training data via
-                        # different methods
-                        train_dataset = data_augmentation(
-                            data=train_data["data"],
-                            target=train_data["target"],
-                            name=train_data["name"],
-                        )
-                        # validation and test data is never augmented
 
-                        val_dataset = RealDataDataset(
-                            data=val_data["data"],
-                            target=val_data["target"],
-                            name=val_data["name"],
-                        )
+                    train_dataset = RealDataDataset(
+                        data=train_data["data"],
+                        target=train_data["target"],
+                        name=train_data["name"],
+                    )
 
-                        test_dataset = RealDataDataset(
-                            data=test_data["data"],
-                            target=test_data["target"],
-                            name=test_data["name"],
-                        )
+                    # validation and test data is never augmented
+                    val_dataset = RealDataDataset(
+                        data=val_data["data"],
+                        target=val_data["target"],
+                        name=val_data["name"],
+                    )
 
-                        if "FineTuneTabPFNClassifier" in model_name:
+                    test_dataset = RealDataDataset(
+                        data=test_data["data"],
+                        target=test_data["target"],
+                        name=test_data["name"],
+                    )
+
+                    if "FineTuneTabPFNClassifier" in model_name:
+                        for augmentation, augmentation_fn in setup_config[
+                            "dataset_augmentations"
+                        ].items():
+                            # depending on the setting we augment the training data via
+                            # different methods. Therefore we overwrite the train_dataset
+                            train_dataset = augmentation_fn(
+                                data=train_data["data"],
+                                target=train_data["target"],
+                                name=train_data["name"],
+                            )
+
                             model = trainer.fine_tune_model(
                                 train_loader=DataLoader(
                                     dataset=train_dataset,
@@ -158,7 +166,7 @@ else:
                                     num_workers=0,
                                     batch_size=model_training_kwargs.get(
                                         "batch_size",
-                                        16,
+                                        1,
                                     ),
                                 ),
                                 val_dataset=val_dataset,
@@ -168,6 +176,35 @@ else:
                                 device=setup_config["device"],
                                 **modelkwargs_dict.get(model_name, {}),
                             )
+
+                            # evaluate the model given the right setting
+                            trained_model, performance_metrics = (
+                                evaluator.fit_and_predict_model(
+                                    model=model,
+                                    train_dataset=train_dataset,
+                                    test_dataset=test_dataset,
+                                    random_state=random_state,
+                                    dataset_id=dataset_id,
+                                    fold_i=fold_i,
+                                    **model_training_kwargs,
+                                )
+                            )
+                            # add settings to performance metrics dictionary
+                            performance_metrics.update(
+                                {
+                                    "random_state": random_state,
+                                    "dataset_id": dataset_id,
+                                    "fold": fold_i,
+                                    "model": type(model).__name__,
+                                    "augmentation": augmentation,
+                                },
+                            )
+
+                            if results_df is None:
+                                results_df = pd.DataFrame([performance_metrics])
+                            else:
+                                results_df.loc[len(results_df)] = performance_metrics
+                    else:
                         # create a model which uses modelkwargs
                         model = model_fn(**model_architectural_kwargs)
 
@@ -184,15 +221,16 @@ else:
                             )
                         )
 
-                    # add settings to performance metrics dictionary
-                    performance_metrics.update(
-                        {
-                            "random_state": random_state,
-                            "dataset_id": dataset_id,
-                            "fold": fold_i,
-                            "model": type(model).__name__,
-                        },
-                    )
+                        # add settings to performance metrics dictionary
+                        performance_metrics.update(
+                            {
+                                "random_state": random_state,
+                                "dataset_id": dataset_id,
+                                "fold": fold_i,
+                                "model": type(model).__name__,
+                                "augmentation": "none",
+                            },
+                        )
 
                     if results_df is None:
                         results_df = pd.DataFrame([performance_metrics])
@@ -329,13 +367,13 @@ plot_settings = {
     "accuracy": {"bar_label": "center"},
     "auc": {"bar_label": "center"},
     "f1": {"bar_label": "center"},
-    "cross_entropy": {"bar_label": "center"},
+    "log_loss": {"bar_label": "center"},
 }
 performance_metrics = [
     "accuracy",
     "auc",
     "f1",
-    "cross_entropy",
+    "log_loss",
     "time_fit",
     "time_predict",
 ]

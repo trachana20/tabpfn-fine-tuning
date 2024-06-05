@@ -1,10 +1,9 @@
 from __future__ import annotations
 
+import pickle
 import time
-from collections import defaultdict
 from pathlib import Path
 
-import numpy as np
 import torch
 from evaluation.model_evaluation import classification_performance_metrics
 from gym.utils import (
@@ -13,7 +12,6 @@ from gym.utils import (
     update_epoch_metrics_with_batch_metrics,
 )
 from models.FineTuneTabPFNClassifier import FineTuneTabPFNClassifier
-from sklearn.metrics import accuracy_score, roc_auc_score
 from torch import nn
 
 
@@ -62,8 +60,18 @@ class Trainer:
         else:
             raise ValueError(f"Fine tune type {fine_tune_type} not supported")
 
-    def _store_model_weights(self, weights, weights_path):
-        torch.save(weights, weights_path)
+    def _store_model_weights_and_training_metrics(
+        self,
+        state_dict,
+        weights_path,
+        training_metrics,
+        training_metrics_path,
+    ):
+        Path(Path(weights_path).parent).mkdir(parents=True, exist_ok=True)
+        torch.save(state_dict, weights_path)
+        # Save the datasets to a pickle file
+        with open(training_metrics_path, "wb") as file:
+            pickle.dump(training_metrics, file)
 
     def full_weight_fine_tuning(
         self,
@@ -83,10 +91,35 @@ class Trainer:
             params=tabpfn_model.parameters(),
             lr=training["learning_rate"],
         )
+
+        training.get("early_stopping_threshold", 0.1)
         tabpfn_model.train()
         tabpfn_model.to(device)
 
         num_classes = train_loader.dataset.num_classes
+
+        current_state_dict = tabpfn_model.state_dict()
+
+        # measure validation performance before any fine-tuning
+        # Call validation function after each epoch
+        with torch.no_grad():
+            validation_metrics = self.validate_tabpfn_model(
+                tabpfn_classifier=tabpfn_classifier,
+                tabpfn_model=tabpfn_model,
+                val_dataset=val_dataset,
+            )
+
+        current_lowest_log_loss = validation_metrics["log_loss"]
+
+        update_lowest_model_counts = 0
+        # start fine-tuning iteration
+        # in each iteration, we first load a databatch and compute the
+        # gradients to update the models weights. Then we evaluate the
+        # validation performance on a validation dataset. If the log_loss
+        # performance on the validation dataset improves more than the
+        # early stopping threshold then we cache the models statedict of
+        # the current iteration.
+        training_metrics = []
 
         for _epoch_i in range(training["epochs"]):
             epoch_metrics = {}
@@ -147,19 +180,48 @@ class Trainer:
 
             # Call validation function after each epoch
             with torch.no_grad():
-                self.model_validation(
+                validation_metrics = self.validate_tabpfn_model(
                     tabpfn_classifier=tabpfn_classifier,
                     tabpfn_model=tabpfn_model,
                     val_dataset=val_dataset,
                 )
+                # Validation early stopping. We use the log loss performance
+                # on a validation set to estimate the models fine-tuning performance
 
-            # TODO  implement early validation stopping!
+                if current_lowest_log_loss > validation_metrics["log_loss"]:
+                    # the lower the better
+                    current_state_dict = tabpfn_model.state_dict()
+                    current_lowest_log_loss = validation_metrics["log_loss"]
+                    update_lowest_model_counts += 1
 
-        self._store_model_weights(tabpfn_model.state_dict(), weights_path)
+            # store training metrics in one file to store later
+            training_metrics.append(
+                {
+                    **{f"training_{k}": v for k, v in validation_metrics.items()},
+                    **{f"validation_{k}": v for k, v in validation_metrics.items()},
+                    "update_lowest_model_counts": update_lowest_model_counts,
+                }
+            )
+
+        # save weights with lowest validation performance
+        self._store_model_weights_and_training_metrics(
+            state_dict=current_state_dict,
+            weights_path=weights_path,
+            training_metrics=training_metrics,
+            training_metrics_path=f"{weights_path[:-4]}_training_metrics.pkl",
+        )
+
+        # load tabpfn model with best validation performance weights
+        tabpfn_model.load_state_dict(current_state_dict)
+
+        # set nn.Module back into eval model, so no further gradients are computed
         tabpfn_model.eval()
+
+        # just to be sure the nn.Moduel, which we finetuned is really used
+        tabpfn_classifier.model = (None, None, tabpfn_model)
         return tabpfn_classifier
 
-    def model_validation(self, tabpfn_classifier, tabpfn_model, val_dataset):
+    def validate_tabpfn_model(self, tabpfn_classifier, tabpfn_model, val_dataset):
         # for the validation we insert the nn.Module back into the tabpfnclassifier
         # instance so we mimic the exact way that TabPFN does predictions
         # (pre-processing, softmax temperature, etc.)
