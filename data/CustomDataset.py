@@ -1,9 +1,10 @@
-import torch
+from __future__ import annotations
+
 import numpy as np
 from torch.utils.data import Dataset
 
 
-class CustomDataset(Dataset):
+class RealDataDataset(Dataset):
     def __init__(self, data, target, name):
         self.name = name
         self.number_rows = len(data)
@@ -17,4 +18,7 @@ class CustomDataset(Dataset):
         return len(self.features)
 
     def __getitem__(self, idx):
-        return self.features[idx], self.labels[idx]
+        # ignore idx
+        # we want to shuffle the dataset
+        perm_indices = np.random.permutation(self.number_rows)
+        return self.features[perm_indices], self.labels[perm_indices]

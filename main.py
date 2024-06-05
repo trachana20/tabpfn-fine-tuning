@@ -16,8 +16,8 @@ from sklearn.tree import DecisionTreeClassifier
 from tabpfn import TabPFNClassifier
 from torch.nn import CrossEntropyLoss
 from torch.optim import Adam
-from utils import set_seed_globally
 from torch.utils.data import DataLoader
+from utils import set_seed_globally
 
 # Step 0: Define hyperparameters which are valid for all models and model
 # specific hyperparameters
@@ -58,7 +58,7 @@ modelkwargs_dict = {
         },
         "training": {
             "epochs": 10,
-            "batch_size": 16,
+            "batch_size": 1,
             "learning_rate": 0.000001,
             "criterion": CrossEntropyLoss,
             "optimizer": Adam,

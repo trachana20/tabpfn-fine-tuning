@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 import numpy as np
 import torch
+from evaluation.model_evaluation import classification_performance_metrics
+from gym.utils import (
+    to_numpy,
+    update_epoch_metrics_with_batch_metrics,
+    average_epoch_metrics,
+)
 from models.FineTuneTabPFNClassifier import FineTuneTabPFNClassifier
 from sklearn.metrics import accuracy_score, roc_auc_score
 from torch import nn
-
-from pathlib import Path
 
 
 class Trainer:
@@ -84,25 +88,18 @@ class Trainer:
         num_classes = train_loader.dataset.num_classes
 
         for _epoch_i in range(training["epochs"]):
-            epoch_loss = 0.0  # initialize epoch loss
-            num_batches = len(train_loader)
+            epoch_metrics = {}
             for _batch_i, (x, y) in enumerate(train_loader):
                 optimizer.zero_grad()
+                x = x.transpose(0, 1)  # batch_first = False
+                y = y.transpose(0, 1)  # batch_first = False
 
-                single_eval_pos = x.shape[0] // 2
-                x_train = x[:single_eval_pos]
+                single_eval_pos = int(x.shape[0] * 0.8)  # 80% for training 20% query
                 y_train = y[:single_eval_pos]
-                x_query = x[single_eval_pos:]
                 y_query = y[single_eval_pos:]
-                # x_data shape: sequence_length, num_features
-                #  -> sequence_length, batch_size=1, num_features
-                x_data = torch.cat([x_train, x_query], dim=0).unsqueeze(1).to(device)
 
                 # prepare x_data with padding with zeros up to 100 features
-                x_data = nn.functional.pad(
-                    x_data,
-                    (0, 100 - x_data.shape[-1]),
-                ).float()
+                x_data = nn.functional.pad(x, (0, 100 - x.shape[-1])).float()
 
                 # y_train shape: sequence_length
                 #  -> sequence_length, batch_size=1
@@ -110,23 +107,46 @@ class Trainer:
 
                 y_preds = tabpfn_model(
                     (x_data, y_data),
-                    single_eval_pos=len(x_train),
+                    single_eval_pos=single_eval_pos,
                 ).reshape(-1, 10)[:, :num_classes]
+
+                # y_preds are raw logits -> normalize with softmax
+                # TODO find out what softmax temperature TabPFN uses
+                y_preds = y_preds.softmax(dim=-1)
 
                 y_query = y_query.long().flatten()
                 loss = criterion(y_preds, y_query)
 
-                epoch_loss += loss.item()
-
+                # compute gradients and store in nn.Parameters
                 loss.backward()
+                # update weights with stored gradients
                 optimizer.step()
 
-                # Print batch progress
-            training_metrics = {"epoch_loss": epoch_loss / num_batches}
-            print(f"Epoch {_epoch_i} loss: {epoch_loss / num_batches}")
+                # compute batch-specific performance metrics
+                batch_metrics = classification_performance_metrics(
+                    y_preds=to_numpy(y_preds),
+                    y_true=to_numpy(y_query),
+                )
+                # enrich batch metrics with additional information
+                batch_metrics["train_loss"] = loss.item()
+                batch_metrics["num_classes"] = y_preds.shape[-1]
+                batch_metrics["num_features"] = x_data.shape[-1]
+                batch_metrics["sequence_length"] = x.shape[0]
+
+                # aggregate metrics over multiple batches
+                epoch_metrics = update_epoch_metrics_with_batch_metrics(
+                    epoch_metrics=epoch_metrics,
+                    batch_metrics=batch_metrics,
+                )
+
+            # aggregate over batches and visualize metrics
+            averaged_epoch_metrics = average_epoch_metrics(epoch_metrics=epoch_metrics)
+
+            # TODO vall visualization
+
             # Call validation function after each epoch
             with torch.no_grad():
-                evaluation_metrics = self.model_validation(
+                self.model_validation(
                     tabpfn_classifier=tabpfn_classifier,
                     tabpfn_model=tabpfn_model,
                     val_loader=val_loader,
