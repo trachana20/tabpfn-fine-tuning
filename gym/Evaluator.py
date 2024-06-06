@@ -8,11 +8,8 @@ from sklearn.metrics import accuracy_score, roc_auc_score
 
 
 class Evaluator:
-    def __init__(
-        self,
-        logger=None,
-    ):
-        self.logger = logger
+    def __init__(self, visualizer):
+        self.visualizer = visualizer
 
     def fit_and_predict_model(
         self,
@@ -24,14 +21,6 @@ class Evaluator:
         fold_i,
         **model_kwargs,
     ):
-        if self.logger is not None:
-            self.logger.register_incumbent(
-                random_state=random_state,
-                dataset_id=dataset_id,
-                fold_i=fold_i,
-                model=model,
-            )
-
         model, performance_metrics = self.fit_and_predict_sklearn_model(
             model=model,
             train_dataset=train_dataset,
@@ -39,12 +28,6 @@ class Evaluator:
             **model_kwargs,
         )
 
-        if self.logger is not None:
-            step = 0
-            self.logger.update_traing_metrics(
-                performance_metrics=performance_metrics,
-                step=step,
-            )
         return model, performance_metrics
 
     def fit_and_predict_sklearn_model(

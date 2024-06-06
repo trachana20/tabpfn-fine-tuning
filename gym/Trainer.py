@@ -16,11 +16,8 @@ from torch import nn
 
 
 class Trainer:
-    def __init__(
-        self,
-        logger=None,
-    ):
-        self.logger = logger
+    def __init__(self, visualizer):
+        self.visualizer = visualizer
 
     def fine_tune_model(
         self,

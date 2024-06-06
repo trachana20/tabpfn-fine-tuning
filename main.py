@@ -11,7 +11,7 @@ from data.FullRealDataDataset import FullRealDataDataset
 from data.RealDataDataset import RealDataDataset
 from gym.Evaluator import Evaluator
 from gym.Trainer import Trainer
-from logger.Logger import Logger
+from gym.Visualizer import Visualizer
 from models.FineTuneTabPFNClassifier import FineTuneTabPFNClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import DecisionTreeClassifier
@@ -73,15 +73,11 @@ modelkwargs_dict = {
 dataset_mapper = {168746: "Titanic", 9982: "Dress-Sales"}
 
 
-logger = Logger(
-    project_name=setup_config["project_name"],
-    log_wandb=setup_config["log_wandb"],
-    results_path=f"{setup_config['results_path']}",
-)
-logger.setup_wandb(setup_config=setup_config)
+visualizer = Visualizer(path=f"{setup_config['results_path']}")
 
-evaluator = Evaluator(logger=logger if setup_config["log_wandb"] else None)
-trainer = Trainer(logger=logger)
+
+evaluator = Evaluator(visualizer=Visualizer)
+trainer = Trainer(visualizer=visualizer)
 
 results_df = None
 
@@ -239,7 +235,7 @@ else:
 
     os.makedirs(f"{setup_config['results_path']}", exist_ok=True)
     results_df.to_pickle(f"{setup_config['results_path']}results_df.pkl")
-    logger.save_results()
+    visualizer.save_results()
 
 
 # ----------------- Visualize results -----------------
