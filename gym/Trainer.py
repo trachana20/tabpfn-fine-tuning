@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pickle
 import time
+import warnings
 from pathlib import Path
 
 import torch
@@ -14,6 +15,12 @@ from gym.utils import (
 from models.FineTuneTabPFNClassifier import FineTuneTabPFNClassifier
 from torch import nn
 from tqdm import tqdm
+
+# Filter out UserWarnings from torch.utils.checkpoint
+warnings.filterwarnings(
+    "ignore",
+    message="torch.utils.checkpoint: please pass in use_reentrant=True or use_reentrant=False explicitly.*",
+)
 
 
 class Trainer:

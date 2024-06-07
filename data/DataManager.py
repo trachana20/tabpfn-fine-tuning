@@ -10,10 +10,21 @@ from preprocessing.PreProcessor import PreProcessor
 from sklearn.model_selection import (
     StratifiedKFold,
     StratifiedShuffleSplit,
-    train_test_split,
+)
+import warnings
+
+# Filter out the warning related to interactive backend
+warnings.filterwarnings(
+    "ignore",
+    message="Backend TkAgg is interactive backend. Turning interactive mode on.",
 )
 
-from data.FullRealDataDataset import FullRealDataDataset
+# Filter out the future warning related to openml
+warnings.filterwarnings(
+    "ignore",
+    category=FutureWarning,
+    message="Starting from Version 0.15 `download_data`, `download_qualities`, and `download_features_meta_data` will all be ``False`` instead of ``True`` by default to enable lazy loading.",
+)
 
 
 class DataManager:
@@ -74,10 +85,11 @@ class DataManager:
         task = openml.tasks.get_task(
             task_id=self.dataset_id,
             download_qualities=True,
-            # download_features_meta_data=True,
-            # download_splits=True,
+            download_features_meta_data=True,
+            download_splits=True,
+            download_data=True,
         )
-        # TODO ignore future warning! We use version, where defaults are correct
+        # ignore future warning! We use version, where defaults are correct
         dataset = task.get_dataset()
         target = task.target_name
         name = dataset.name

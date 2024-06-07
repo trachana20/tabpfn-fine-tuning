@@ -286,27 +286,16 @@ class PreProcessor:
         return train_data, val_data, test_data
 
     def scale(self, train_data, val_data, test_data, target):
-        # Scale data
-        scaler = StandardScaler()
-
+        # standard scaler (x-mean) / std
         columns = list(train_data.columns)
         columns.remove(target)
         for col in columns:
+            mean = train_data[col].mean()
+            std = train_data[col].std()
             # Reshape the data to 2D for StandardScaler
-            train_data[col] = pd.Series(
-                scaler.fit_transform(train_data[[col]]).flatten(),
-                index=train_data.index,
-            )
-
-            # Transform the validation and test data using the same scaler
-            val_data[col] = pd.Series(
-                scaler.transform(val_data[[col]]).flatten(),
-                index=val_data.index,
-            )
-            test_data[col] = pd.Series(
-                scaler.transform(test_data[[col]]).flatten(),
-                index=test_data.index,
-            )
+            train_data[col] = train_data[col].apply(lambda x: (x - mean) / std)
+            val_data[col] = val_data[col].apply(lambda x: (x - mean) / std)
+            test_data[col] = test_data[col].apply(lambda x: (x - mean) / std)
 
         return train_data, val_data, test_data
 
