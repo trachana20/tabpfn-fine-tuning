@@ -194,12 +194,14 @@ else:
                                 )
                             )
                             # add settings to performance metrics dictionary
-                            performance_metrics.update(fine_tuning_configuration)
+                            fine_tuning_configuration.update(performance_metrics)
 
                             if results_df is None:
-                                results_df = pd.DataFrame([performance_metrics])
+                                results_df = pd.DataFrame([fine_tuning_configuration])
                             else:
-                                results_df.loc[len(results_df)] = performance_metrics
+                                results_df.loc[len(results_df)] = (
+                                    fine_tuning_configuration
+                                )
                     else:
                         # create a model which uses modelkwargs
                         model = model_fn(**model_architectural_kwargs)

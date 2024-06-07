@@ -106,6 +106,7 @@ class Trainer:
         training.get("early_stopping_threshold", 0.1)
         tabpfn_model.train()
         tabpfn_model.to(device)
+        tabpfn_classifier.device = device
 
         num_classes = train_loader.dataset.num_classes
 
@@ -136,8 +137,8 @@ class Trainer:
             epoch_metrics = {}
             for _batch_i, (x, y) in enumerate(train_loader):
                 optimizer.zero_grad()
-                x = x.transpose(0, 1)  # batch_first = False
-                y = y.transpose(0, 1)  # batch_first = False
+                x = x.transpose(0, 1).to(device)  # batch_first = False
+                y = y.transpose(0, 1).to(device)  # batch_first = False
 
                 single_eval_pos = int(x.shape[0] * 0.8)  # 80% for training 20% query
                 y_train = y[:single_eval_pos]
@@ -226,7 +227,7 @@ class Trainer:
                     **{f"training_{k}": v for k, v in validation_metrics.items()},
                     **{f"validation_{k}": v for k, v in validation_metrics.items()},
                     "update_lowest_model_counts": update_lowest_model_counts,
-                }
+                },
             )
 
         # save weights with lowest validation performance
@@ -247,7 +248,12 @@ class Trainer:
         tabpfn_classifier.model = (None, None, tabpfn_model)
         return tabpfn_classifier
 
-    def validate_tabpfn_model(self, tabpfn_classifier, tabpfn_model, val_dataset):
+    def validate_tabpfn_model(
+        self,
+        tabpfn_classifier,
+        tabpfn_model,
+        val_dataset,
+    ):
         # for the validation we insert the nn.Module back into the tabpfnclassifier
         # instance so we mimic the exact way that TabPFN does predictions
         # (pre-processing, softmax temperature, etc.)
