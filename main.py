@@ -60,7 +60,7 @@ modelkwargs_dict = {
             "fine_tune_type": "full_weight_fine_tuning",
         },
         "training": {
-            "epochs": 10,
+            "epochs": 1000,
             "batch_size": 1,
             "learning_rate": 1e-6,
             "criterion": CrossEntropyLoss,
@@ -69,8 +69,6 @@ modelkwargs_dict = {
         },
     },
 }
-
-dataset_mapper = {168746: "Titanic", 9982: "Dress-Sales"}
 
 
 visualizer = Visualizer(path=f"{setup_config['results_path']}")
@@ -91,7 +89,7 @@ else:
         set_seed_globally(random_state)
 
         # ---------- ---------- ---------- ---------- ----------  DATASET ID LOOP
-        for dataset_id in setup_config["dataset_mapping"]:
+        for dataset_id, dataset_name in setup_config["dataset_mapping"].items():
             # Step 3: Load  data
             data_manager = DataManager(
                 dir_path="data/dataset",
@@ -147,6 +145,15 @@ else:
                         for augmentation, augmentation_fn in setup_config[
                             "dataset_augmentations"
                         ].items():
+                            fine_tuning_configuration = {
+                                "random_state": random_state,
+                                "dataset_id": dataset_id,
+                                "dataset_name": dataset_name,
+                                "fold": fold_i,
+                                "model": model_fn,
+                                "augmentation": augmentation,
+                            }
+
                             # depending on the setting we augment the training data via
                             # different methods. Therefore we overwrite the train_dataset
                             train_dataset = augmentation_fn(
@@ -170,6 +177,7 @@ else:
                                     "fine_tune_type"
                                 ],
                                 device=setup_config["device"],
+                                fine_tuning_configuration=fine_tuning_configuration,
                                 **modelkwargs_dict.get(model_name, {}),
                             )
 
@@ -186,15 +194,7 @@ else:
                                 )
                             )
                             # add settings to performance metrics dictionary
-                            performance_metrics.update(
-                                {
-                                    "random_state": random_state,
-                                    "dataset_id": dataset_id,
-                                    "fold": fold_i,
-                                    "model": type(model).__name__,
-                                    "augmentation": augmentation,
-                                },
-                            )
+                            performance_metrics.update(fine_tuning_configuration)
 
                             if results_df is None:
                                 results_df = pd.DataFrame([performance_metrics])
@@ -233,6 +233,8 @@ else:
                     else:
                         results_df.loc[len(results_df)] = performance_metrics
 
+    visualizer.save_training_logs_as_csv()
+
     os.makedirs(f"{setup_config['results_path']}", exist_ok=True)
     results_df.to_pickle(f"{setup_config['results_path']}results_df.pkl")
     visualizer.save_results()
@@ -250,7 +252,7 @@ def bar_plot_dataset_performance_across_folds(
     dataset_id,
     plot_settings,
 ):
-    dataset_name = dataset_mapper[dataset_id]
+    dataset_name = setup_config["dataset_mapping"][dataset_id]
 
     selected_df = results_df[results_df["dataset_id"] == dataset_id][["model", metric]]
 

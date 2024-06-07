@@ -13,6 +13,7 @@ from gym.utils import (
 )
 from models.FineTuneTabPFNClassifier import FineTuneTabPFNClassifier
 from torch import nn
+from tqdm import tqdm
 
 
 class Trainer:
@@ -25,6 +26,7 @@ class Trainer:
         val_dataset,
         fine_tune_type,
         device,
+        fine_tuning_configuration,
         **kwargs,
     ):
         # This function materializes/instantiates the tabpfn classifier
@@ -46,6 +48,18 @@ class Trainer:
         # 2. if weights_path does not exist, fine_tune the model
         # call the correct fine tuning function
         if fine_tune_type == "full_weight_fine_tuning":
+            # register new writer in visualizer, which tracks the training process
+
+            writer_name = f"{fine_tune_type}_{fine_tuning_configuration['augmentation']}_{fine_tuning_configuration['dataset_name']}_{fine_tuning_configuration['fold']}_{fine_tuning_configuration['random_state']}"
+            self.visualizer.register_writer(
+                writer_name=writer_name,
+                config={
+                    **kwargs,
+                    **fine_tuning_configuration,
+                    "fine_tune_type": fine_tune_type,
+                },
+            )
+
             return self.full_weight_fine_tuning(
                 tabpfn_classifier=tabpfn_classifier,
                 train_loader=train_loader,
@@ -118,7 +132,7 @@ class Trainer:
         # the current iteration.
         training_metrics = []
 
-        for _epoch_i in range(training["epochs"]):
+        for epoch_i in tqdm(range(training["epochs"])):
             epoch_metrics = {}
             for _batch_i, (x, y) in enumerate(train_loader):
                 optimizer.zero_grad()
@@ -171,9 +185,16 @@ class Trainer:
                 )
 
             # aggregate over batches and visualize metrics
-            average_epoch_metrics(epoch_metrics=epoch_metrics)
+            epoch_metrics = average_epoch_metrics(epoch_metrics=epoch_metrics)
 
-            # TODO call visualization
+            # call visualization
+
+            for metric, value in epoch_metrics.items():
+                self.visualizer.update_scalar_value(
+                    f"training/{metric}",
+                    value,
+                    epoch=epoch_i,
+                )
 
             # Call validation function after each epoch
             with torch.no_grad():
@@ -182,6 +203,14 @@ class Trainer:
                     tabpfn_model=tabpfn_model,
                     val_dataset=val_dataset,
                 )
+                # visualize validation metrics
+
+                for metric, value in validation_metrics.items():
+                    self.visualizer.update_scalar_value(
+                        f"validation/{metric}",
+                        value,
+                        epoch=epoch_i,
+                    )
                 # Validation early stopping. We use the log loss performance
                 # on a validation set to estimate the models fine-tuning performance
 
