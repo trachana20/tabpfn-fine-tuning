@@ -225,7 +225,7 @@ else:
                                 "random_state": random_state,
                                 "dataset_id": dataset_id,
                                 "fold": fold_i,
-                                "model": type(model).__name__,
+                                "model": model_fn,
                                 "augmentation": "none",
                             },
                         )
