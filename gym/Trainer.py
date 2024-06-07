@@ -21,6 +21,17 @@ warnings.filterwarnings(
     "ignore",
     message="torch.utils.checkpoint: please pass in use_reentrant=True or use_reentrant=False explicitly.*",
 )
+from contextlib import contextmanager
+
+
+@contextmanager
+def suppress_warnings():
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="torch.utils.checkpoint: please pass in use_reentrant=True or use_reentrant=False explicitly.*",
+        )
+        yield
 
 
 class Trainer:
@@ -282,7 +293,8 @@ class Trainer:
         fitting_time = time.time() - start_time
 
         start_time = time.time()
-        y_preds = tabpfn_classifier.predict_proba(x_query)
+        with suppress_warnings():
+            y_preds = tabpfn_classifier.predict_proba(x_query)
         prediction_time = time.time()
 
         # for this evaluation we do not need to convert to numpy
