@@ -52,7 +52,7 @@ modelkwargs_dict = {
     "FineTuneTabPFNClassifier_full_weight": {
         "architectural": {
             # finetune models need a normal TabPFNClassifier instance
-            "tabpfn_classifier": TabPFNClassifier(),
+            "tabpfn_classifier": TabPFNClassifier(batch_size_inference=5),
             # weights_path is the location from where the model is loaded if path exists
             # or if not exists where the weights are stored in
             "weights_path": "model_weights/FullWeightFineTuneTabPFN.pth",
@@ -61,13 +61,20 @@ modelkwargs_dict = {
         },
         "training": {
             "epochs": 1000,
-            "batch_size": 1,
+            "batch_size": 2,
             "learning_rate": 1e-6,
             "criterion": CrossEntropyLoss,
             "optimizer": Adam,
             "early_stopping_threshold": 0.1,
         },
     },
+}
+
+augmentationkwargs_dict = {
+    # batch elements are row-granularity! we introduce one edge case which is
+    # "full" -> use all rows in the dataset. Number of rows is only exactly known later
+    "FullRealDataDataset": {"batch_size": "full"},
+    "BatchedRealDataDataset": {"batch_size": 50},
 }
 
 
@@ -145,6 +152,10 @@ else:
                         for augmentation, augmentation_fn in setup_config[
                             "dataset_augmentations"
                         ].items():
+                            augmentation_kwargs = augmentationkwargs_dict.get(
+                                augmentation, {}
+                            )
+
                             fine_tuning_configuration = {
                                 "random_state": random_state,
                                 "dataset_id": dataset_id,
@@ -162,15 +173,23 @@ else:
                                 name=train_data["name"],
                             )
 
+                            batch_size = augmentation_kwargs.get(
+                                "batch_size",
+                                1,
+                            )
+                            batch_size = (
+                                train_dataset.number_rows
+                                if batch_size == "full"
+                                else batch_size
+                            )
+
                             model = trainer.fine_tune_model(
                                 train_loader=DataLoader(
                                     dataset=train_dataset,
                                     shuffle=True,
                                     num_workers=0,
-                                    batch_size=model_training_kwargs.get(
-                                        "batch_size",
-                                        1,
-                                    ),
+                                    collate_fn=train_dataset._collate_fn,
+                                    batch_size=batch_size,
                                 ),
                                 val_dataset=val_dataset,
                                 fine_tune_type=model_architectural_kwargs[

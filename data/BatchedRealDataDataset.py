@@ -5,7 +5,7 @@ from torch.utils.data import Dataset, IterableDataset
 import torch
 
 
-class FullRealDataDataset(Dataset):
+class BatchedRealDataDataset(Dataset):
     def __init__(self, data, target, name):
         self.name = name
         self.number_rows = len(data)
