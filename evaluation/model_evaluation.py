@@ -4,6 +4,8 @@ import numpy as np
 from sklearn.metrics import accuracy_score, f1_score, log_loss, roc_auc_score
 import torch
 
+from torch.nn import CrossEntropyLoss
+
 
 # from tabpfn codebase (https://github.com/automl/TabPFN/blob/main/tabpfn/scripts/tabular_metrics.py)
 def auc_metric(target, pred, multi_class="ovo", numpy=False):
@@ -49,7 +51,8 @@ def classification_performance_metrics(y_preds, y_true):
     metrics_dict["f1"] = f1
 
     # Compute cross-entropy
-    log_loss_value = log_loss(y_true, y_preds)
+    # https://scikit-learn.org/stable/modules/generated/sklearn.metrics.log_loss.html
+    log_loss_value = log_loss(y_pred=y_preds, y_true=y_true)
     metrics_dict["log_loss"] = log_loss_value
 
     # Return metrics as a dictionary

@@ -173,20 +173,12 @@ class PreProcessor:
         # Get categorical and numerical features using list comprehension and zip
         categorical_features = {
             name
-            for indicator, name in zip(
-                categorical_indicator,
-                attribute_names,
-                strict=False,
-            )
+            for indicator, name in zip(categorical_indicator, attribute_names)
             if indicator and name != target
         }
         numerical_features = {
             name
-            for indicator, name in zip(
-                categorical_indicator,
-                attribute_names,
-                strict=False,
-            )
+            for indicator, name in zip(categorical_indicator, attribute_names)
             if not indicator and name != target
         }
         # the OpenML categorical indicator is not very accuracte:

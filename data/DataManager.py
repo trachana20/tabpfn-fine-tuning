@@ -81,6 +81,16 @@ class DataManager:
 
     # ----- ----- ----- ----- ----- create k-fold splits (strategy: StratifiedKFold)
     def k_fold_train_test_split(self, k_folds, val_size, random_state):
+        import pkg_resources
+        import os
+
+        version = pkg_resources.get_distribution("openml").version
+        print(version)
+        print("OpenML installation path:", os.path.dirname(openml.__file__))
+
+        import sys
+
+        print(sys.executable)
         # Preprocess the data (Missing values, encoding, outliers, scaling,...)
         task = openml.tasks.get_task(
             task_id=self.dataset_id,
