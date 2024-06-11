@@ -15,6 +15,8 @@ class FullRealDataDataset(Dataset):
         self.labels = data[target].values
         self.num_classes = np.unique(self.labels).shape[0]
 
+        # 1. create DT based on Train data
+
     def __getitem__(self, idx):
         return self.features[idx], self.labels[idx]
 
