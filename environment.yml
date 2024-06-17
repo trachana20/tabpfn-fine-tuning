@@ -3,27 +3,21 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - _libgcc_mutex=0.1=conda_forge
-  - _openmp_mutex=4.5=2_gnu
-  - bzip2=1.0.8=hd590300_5
-  - ca-certificates=2024.2.2=hbcca054_0
-  - ld_impl_linux-64=2.40=h41732ed_0
-  - libffi=3.4.2=h7f98852_5
-  - libgcc-ng=13.2.0=h807b86a_5
-  - libgomp=13.2.0=h807b86a_5
-  - libnsl=2.0.1=hd590300_0
-  - libsqlite=3.45.2=h2797004_0
-  - libuuid=2.38.1=h0b41bf4_0
-  - libxcrypt=4.4.36=hd590300_1
-  - libzlib=1.2.13=hd590300_5
-  - ncurses=6.4.20240210=h59595ed_0
-  - openssl=3.2.1=hd590300_1
-  - python=3.10.14=hd12c33a_0_cpython
-  - readline=8.2=h8228510_1
-  - setuptools=69.2.0=pyhd8ed1ab_0
-  - tk=8.6.13=noxft_h4845f30_101
-  - wheel=0.43.0=pyhd8ed1ab_0
-  - xz=5.2.6=h166bdaf_0
+  - bzip2
+  - ca-certificates
+  - libffi
+  - libsqlite
+  - libuuid
+  - libzlib
+  - ncurses
+  - openssl
+  - python=3.10
+  - readline
+  - setuptools
+  - tk
+  - wheel
+  - xz
+  - pip
   - pip:
       - appdirs==1.4.4
       - argon2-cffi==23.1.0
@@ -51,7 +45,7 @@ dependencies:
       - pandas==2.0.3
       - pillow==10.3.0
       - pip==24.0
-      - protobuf==4.25.3
+      - protobuf>=3.19.6, <4
       - psutil==5.9.8
       - pyarrow==15.0.2
       - pycparser==2.22
@@ -69,6 +63,8 @@ dependencies:
       - six==1.16.0
       - smmap==5.0.1
       - tabpfn==0.1.10
+      - tensorboard==2.12.2
+      - tensorboardX>=2.5, <2.6
       - threadpoolctl==3.4.0
       - tqdm==4.66.2
       - typing-extensions==4.10.0
@@ -76,4 +72,4 @@ dependencies:
       - urllib3==2.2.1
       - wandb==0.16.6
       - xmltodict==0.13.0
-prefix: /home/pufferfish/anaconda3/envs/finetune
+prefix: /home/rachana/anaconda3/envs/finetune

@@ -14,8 +14,8 @@ To get started with this project, follow these steps:
 ## Setup Repository & Environment
 1. **Clone the Repository:**
    ```bash
-   git clone https://github.com/PufferFishCode/FineTune-TabPFN.git
-   cd FineTune-TabPFN
+   git clone https://github.com/automl-private/fine-tuning-tabpfn.git
+   cd fine-tuning-tabpfn
 2. **Create Conda Environment:**
     ```bash
    conda env create -f environment.yml
