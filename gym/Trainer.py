@@ -45,7 +45,7 @@ class Trainer:
         fine_tune_type,
         device,
         fine_tuning_configuration,
-        **kwargs,
+        **kwargs,   # Keyword arguments
     ):
         # This function materializes/instantiates the tabpfn classifier
         # either an existing model is loaded or a tabpfn is finetuned
@@ -136,8 +136,7 @@ class Trainer:
             validation_metrics = self.validate_tabpfn_model(
                 tabpfn_classifier=tabpfn_classifier,
                 tabpfn_model=tabpfn_model,
-                val_dataset=val_dataset,
-                train_dataset=train_loader.dataset,
+                val_dataset=val_dataset
             )
 
         current_lowest_log_loss = validation_metrics["log_loss"]
@@ -271,8 +270,7 @@ class Trainer:
         self,
         tabpfn_classifier,
         tabpfn_model,
-        val_dataset,
-        train_dataset,
+        val_dataset
     ):
         # for the validation we insert the nn.Module back into the tabpfnclassifier
         # instance so we mimic the exact way that TabPFN does predictions

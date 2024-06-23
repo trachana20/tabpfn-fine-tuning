@@ -258,7 +258,7 @@ else:
 
     os.makedirs(f"{setup_config['results_path']}", exist_ok=True)
     results_df.to_pickle(f"{setup_config['results_path']}results_df.pkl")
-    visualizer.save_results()
+    visualizer.save_results()   # ToDo: Check this, and if necessary try to implement it
 
 
 # ----------------- Visualize results -----------------
