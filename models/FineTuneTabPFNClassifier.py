@@ -16,7 +16,7 @@ class FineTuneTabPFNClassifier:
         else:
             fine_tuned_model = MockTabPFN(tabpfn_classifier=tabpfn_classifier)
             # just swap out the self.model of the tabpfn_classifier with the new model
-            self.tabpfn_classifier.model = (None, None, fine_tuned_model)
+            self.tabpfn_classifier.model = (None, None, fine_tuned_model.model)
         self.tabpfn_classifier.model_name = "FineTuneTabPFN"
 
     def fit(self, X, y):

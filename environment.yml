@@ -72,4 +72,4 @@ dependencies:
       - urllib3==2.2.1
       - wandb==0.16.6
       - xmltodict==0.13.0
-prefix: /home/rachana/anaconda3/envs/finetune
+prefix: /opt/anaconda3/envs/tabpfn

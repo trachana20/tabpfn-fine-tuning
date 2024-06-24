@@ -52,17 +52,19 @@ modelkwargs_dict = {
     "FineTuneTabPFNClassifier_full_weight": {
         "architectural": {
             # finetune models need a normal TabPFNClassifier instance
-            "tabpfn_classifier": TabPFNClassifier(batch_size_inference=5),
+
+            ## ACHTUNG!! : changing key-value for LORA
+            "tabpfn_classifier": FineTuneTabPFNClassifier(TabPFNClassifier(batch_size_inference=5),""),
             # weights_path is the location from where the model is loaded if path exists
             # or if not exists where the weights are stored in
             "weights_path": "model_weights/FullWeightFineTuneTabPFN.pth",
             # fine_tune_type determines the fine-tuning function, to be used
-            "fine_tune_type": "full_weight_fine_tuning",
+            "fine_tune_type": "LORA-finetuning",
         },
         "training": {
             "epochs": 1000,
             "batch_size": 2,
-            "learning_rate": 1e-6,
+            "learning_rate": 1e-3,
             "criterion": CrossEntropyLoss,
             "optimizer": Adam,
             "early_stopping_threshold": 0.1,
