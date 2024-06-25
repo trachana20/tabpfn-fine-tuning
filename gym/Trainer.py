@@ -58,6 +58,7 @@ class Trainer:
 
         # 1. check if weights_path exists and if so load the fine_tune model
         if Path(weights_path).exists():
+            print(f"Loading fine-tuned model from {weights_path}")
             return FineTuneTabPFNClassifier(
                 tabpfn_classifier=tabpfn_classifier,
                 weights_path=weights_path,
@@ -67,7 +68,7 @@ class Trainer:
         # call the correct fine tuning function
         if fine_tune_type == "full_weight_fine_tuning":
             # register new writer in visualizer, which tracks the training process
-
+            print("Registering new writer")
             writer_name = f"{fine_tune_type}_{fine_tuning_configuration['augmentation']}_{fine_tuning_configuration['dataset_name']}_{fine_tuning_configuration['fold']}_{fine_tuning_configuration['random_state']}"
             self.visualizer.register_writer(
                 writer_name=writer_name,
@@ -113,7 +114,7 @@ class Trainer:
         device,
     ):
         tabpfn_model = tabpfn_classifier.model[2]
-
+        print("Fine-tuning TabPFN model", tabpfn_model)
         criterion = training["criterion"]()
 
         optimizer = training["optimizer"](
@@ -137,7 +138,6 @@ class Trainer:
                 tabpfn_classifier=tabpfn_classifier,
                 tabpfn_model=tabpfn_model,
                 val_dataset=val_dataset,
-                train_dataset=train_loader.dataset,
             )
 
         current_lowest_log_loss = validation_metrics["log_loss"]
@@ -272,7 +272,6 @@ class Trainer:
         tabpfn_classifier,
         tabpfn_model,
         val_dataset,
-        train_dataset,
     ):
         # for the validation we insert the nn.Module back into the tabpfnclassifier
         # instance so we mimic the exact way that TabPFN does predictions

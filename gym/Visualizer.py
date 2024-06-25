@@ -3,7 +3,6 @@ from pathlib import Path
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 from tensorboardX import SummaryWriter
 import json
-
 import pandas as pd
 
 
@@ -15,7 +14,7 @@ class Visualizer:
         Path(self.base_path).mkdir(parents=True, exist_ok=True)
 
         self.summary_writers = {}
-        self.current_path = None
+        self.current_path = f"{self.path}"
 
     def register_writer(self, writer_name, config):
         temp = self.current_path
@@ -93,6 +92,20 @@ class Visualizer:
 
         # Save to CSV
         df.to_csv(csv_file_path, index=False)
+        
+    def save_results(self):
+        # Check if evaluation_data is not empty
+        if self.evaluation_data:
+            # Create the directory if it doesn't exist
+
+            os.makedirs(os.path.dirname(self.results_path), exist_ok=True)
+
+            file_name = self.results_path + "fit_predict.json"
+            # Open the file in write mode and save the data as JSON
+            with open(file_name, "w") as file:
+                json.dump(self.evaluation_data, file)
+        else:
+            print("No evaluation data to save.")
 
     def close(self):
         # Close all the writers when done

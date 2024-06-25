@@ -197,7 +197,8 @@ class DataManager:
         data.to_pickle(f"{self.results_path}.pkl")
 
     def load_results(self):
-        file_path = f"{self.results_path}.pkl"
+        # file_path = f"{self.results_path}_rag.pkl"
+        file_path = '/Users/anshulg954/Desktop/sose24/dllab/tabpfn-fine-tuning/results/results_df_rag.pkl'
         # check if exists
         if not Path(file_path).exists():
             return None

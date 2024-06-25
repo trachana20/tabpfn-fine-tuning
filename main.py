@@ -20,6 +20,44 @@ from torch.nn import CrossEntropyLoss
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from utils import set_seed_globally
+from sklearn.metrics.pairwise import cosine_similarity
+from torch.utils.data import TensorDataset
+from torch.nn.functional import cosine_similarity
+
+
+def retrieve_similar_samples(X_train, y_train, X_test, top_k=5):
+    """
+    Retrieves the top_k similar samples from X_train based on the similarity to each row in X_test.
+
+    Parameters:
+    - X_train: Training data features (torch.Tensor).
+    - y_train: Training data targets (torch.Tensor).
+    - X_test: Test data features (torch.Tensor).
+    - top_k: Number of similar samples to retrieve for each test sample.
+
+    Returns:
+    - Augmented X_train and y_train with similar samples.
+    """
+    # Calculate cosine similarity between each test sample and all training samples
+    similarity_matrix = cosine_similarity(X_test.unsqueeze(1), X_train.unsqueeze(0), dim=2)
+
+    # Retrieve the indices of the top_k most similar training samples for each test sample
+    similar_samples_indices = torch.argsort(similarity_matrix, dim=1, descending=True)[:, :top_k]
+
+    X_retrieved = []
+    y_retrieved = []
+    for i in range(similar_samples_indices.size(0)):
+        indices = similar_samples_indices[i]
+        X_retrieved.append(X_train[indices])
+        y_retrieved.append(y_train[indices])
+
+    X_retrieved = torch.cat(X_retrieved, dim=0)
+    y_retrieved = torch.cat(y_retrieved, dim=0)
+
+    X_augmented = torch.cat((X_train, X_retrieved), dim=0)
+    y_augmented = torch.cat((y_train, y_retrieved), dim=0)
+
+    return X_augmented, y_augmented
 
 # Step 0: Define hyperparameters which are valid for all models and model
 # specific hyperparameters
@@ -87,8 +125,8 @@ trainer = Trainer(visualizer=visualizer)
 results_df = None
 
 
-if os.path.exists(f"{setup_config['results_path']}results_df.pkl"):
-    results_df = pd.read_pickle(f"{setup_config['results_path']}results_df.pkl")
+if os.path.exists(f"{setup_config['results_path']}results_df_rag1.pkl"):
+    results_df = pd.read_pickle(f"{setup_config['results_path']}results_df_rag1.pkl")
 else:
     # Step 2: run the evaluation and training loop
     # ---------- ---------- ---------- ---------- ---------- ---------- RANDOM STATES LOOP
@@ -155,7 +193,6 @@ else:
                             augmentation_kwargs = augmentationkwargs_dict.get(
                                 augmentation, {}
                             )
-
                             fine_tuning_configuration = {
                                 "random_state": random_state,
                                 "dataset_id": dataset_id,
@@ -164,13 +201,23 @@ else:
                                 "model": model_fn,
                                 "augmentation": augmentation,
                             }
+                            # Retrieve similar samples and augment train data
+                            X_train_aug, y_train_aug = retrieve_similar_samples(
+                                torch.tensor(train_dataset.features, dtype=torch.float32),
+                                torch.tensor(train_dataset.labels, dtype=torch.long),
+                                torch.tensor(test_dataset.features, dtype=torch.float32),
+                            )
 
+                            augmented_train_dataset = TensorDataset(
+                                X_train_aug,
+                                y_train_aug,
+                            )
                             # depending on the setting we augment the training data via
                             # different methods. Therefore we overwrite the train_dataset
                             train_dataset = augmentation_fn(
-                                data=train_data["data"],
-                                target=train_data["target"],
-                                name=train_data["name"],
+                                data=augmented_train_dataset["data"],
+                                target=augmented_train_dataset["target"],
+                                name=augmented_train_dataset["name"],
                             )
 
                             batch_size = augmentation_kwargs.get(
@@ -182,7 +229,7 @@ else:
                                 if batch_size == "full"
                                 else batch_size
                             )
-
+                            # print(augmented_train_dataset)
                             model = trainer.fine_tune_model(
                                 train_loader=DataLoader(
                                     dataset=train_dataset,
@@ -199,8 +246,6 @@ else:
                                 fine_tuning_configuration=fine_tuning_configuration,
                                 **modelkwargs_dict.get(model_name, {}),
                             )
-
-                            # evaluate the model given the right setting
                             trained_model, performance_metrics = (
                                 evaluator.fit_and_predict_model(
                                     model=model,
@@ -253,13 +298,12 @@ else:
                         results_df = pd.DataFrame([performance_metrics])
                     else:
                         results_df.loc[len(results_df)] = performance_metrics
-
+    print(results_df)
     visualizer.save_training_logs_as_csv()
 
     os.makedirs(f"{setup_config['results_path']}", exist_ok=True)
-    results_df.to_pickle(f"{setup_config['results_path']}results_df.pkl")
-    visualizer.save_results()
-
+    results_df.to_pickle(f"{setup_config['results_path']}results_df_rag.pkl")
+    # visualizer.save_results()
 
 # ----------------- Visualize results -----------------
 
