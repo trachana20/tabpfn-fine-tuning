@@ -62,7 +62,7 @@ modelkwargs_dict = {
             "fine_tune_type": "LORA-finetuning",
         },
         "training": {
-            "epochs": 1000,
+            "epochs": 50,
             "batch_size": 2,
             "learning_rate": 1e-3,
             "criterion": CrossEntropyLoss,

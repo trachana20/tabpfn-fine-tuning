@@ -117,7 +117,6 @@ class Trainer:
         training,
         device,
     ):
-        apply_lora = False
         tabpfn_model = tabpfn_classifier.model[2]
         # measure validation performance before any fine-tuning
         # Call validation function after each epoch
@@ -137,29 +136,10 @@ class Trainer:
 
         tabpfn_model.train()
 
-
-        if apply_lora:
-            lora.mark_only_lora_as_trainable(tabpfn_model)
-            _, _, lora_layers_params, non_lora_layers_params = return_model_named_parameters(tabpfn_model)
-            
-            optimizer = training["optimizer"](
-                params=lora_layers_params,
-                lr=training["learning_rate"],
-            )
-
-            for name, param in tabpfn_model.named_parameters():
-                if name in non_lora_layers_params:
-                    param.requires_grad = False
-                else:
-                    param.requires_grad = True
-
-        else:
-            optimizer = training["optimizer"](
+        optimizer = training["optimizer"](
                 params=tabpfn_model.parameters(),
                 lr=training["learning_rate"],
-            )
-            for name, param in tabpfn_model.named_parameters():
-                param.requires_grad = True            
+            )         
 
         criterion = training["criterion"]()
         training.get("early_stopping_threshold", 0.1)
@@ -169,10 +149,8 @@ class Trainer:
 
         num_classes = train_loader.dataset.num_classes
 
-        if apply_lora:
-            current_state_dict = lora.lora_state_dict(tabpfn_model)
-        else:
-            current_state_dict = tabpfn_model.state_dict()
+
+        current_state_dict = tabpfn_model.state_dict()
 
         
 
@@ -281,11 +259,8 @@ class Trainer:
 
                 if current_lowest_log_loss > validation_metrics["log_loss"]:
                     # the lower the better
-                    # current_state_dict = tabpfn_model.state_dict()
-                    if apply_lora:
-                        current_state_dict = lora.lora_state_dict(tabpfn_model)
-                    else:
-                        current_state_dict = tabpfn_model.state_dict()
+
+                    current_state_dict = tabpfn_model.state_dict()
                     current_lowest_log_loss = validation_metrics["log_loss"]
                     update_lowest_model_counts += 1
 

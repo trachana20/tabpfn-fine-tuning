@@ -2,6 +2,7 @@ import torch.nn as nn
 import torch
 import os
 import loralib as lora
+import peft
 
 class MockTabPFN(nn.Module):
     def __init__(self, tabpfn_classifier):
@@ -9,7 +10,7 @@ class MockTabPFN(nn.Module):
         self.linear = nn.Linear(100, 10, False)
         self.tabpfn_classifier = tabpfn_classifier
 
-        self.lora_finetuning(self.tabpfn_classifier, False)
+        self.lora_finetuning_with_peft(self.tabpfn_classifier, True)
         # Initialize the weights with random values
         torch.nn.init.normal_(self.linear.weight, mean=0, std=10)
 
@@ -56,3 +57,28 @@ class MockTabPFN(nn.Module):
             # model.decoder[2] = lora.Linear(model.decoder[2].in_features, model.decoder[2].out_features, r=16) ## Assigning LORA to this gives NaN validation output
 
             self.model = model
+    def lora_finetuning_with_peft(self,tabpfn,finetune):
+        model = tabpfn.model[2]
+
+        if not finetune:
+            print("Not applying LoRA...")
+            self.model = model
+
+        else:
+            print("Applying LoRA...")
+            linear_modules = []
+            for n,_ in model.named_modules():
+                if "linear" in n:
+                    linear_modules.append(n)
+            
+            config = peft.LoraConfig(
+                r=8,
+                target_modules=linear_modules
+            )
+
+            peft_model = peft.get_peft_model(model, config)
+            peft_model.print_trainable_parameters()
+
+
+            self.model = peft_model
+
