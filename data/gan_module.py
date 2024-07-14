@@ -35,7 +35,7 @@ def load_and_preprocess_data(file_path):
 
     data = df.values
 
-    return data, scaler, encoder, continuous_features, categorical_features, encoded_cat_columns
+    return data, scaler, encoder, continuous_features, categorical_features, encoded_cat_columns, df, categorical_features
 
 
 def build_generator(input_dim, output_dim):
@@ -100,24 +100,36 @@ def train_gan(gan, generator, discriminator, data, input_dim, epochs=10000, batc
 
 
 def generate_synthetic_data(generator, scaler, encoder, continuous_features, categorical_features, encoded_cat_columns,
-                            num_samples=10):
+                            num_samples=1000):
     noise = np.random.normal(0, 1, (num_samples, generator.input_shape[1]))
     synthetic_data = generator.predict(noise)
 
     # Inverse transform the continuous features
-    synthetic_data[:, :len(continuous_features)] = scaler.inverse_transform(
-        synthetic_data[:, :len(continuous_features)])
+    synthetic_continuous = synthetic_data[:, :len(continuous_features)]
+    synthetic_continuous = scaler.inverse_transform(synthetic_continuous)
 
     # Create a DataFrame for easier manipulation
     synthetic_df = pd.DataFrame(synthetic_data, columns=continuous_features + list(encoded_cat_columns))
+
+    # Replace continuous data with the inverse transformed values
+    synthetic_df[continuous_features] = synthetic_continuous
 
     # Round continuous features
     for feature in continuous_features:
         synthetic_df[feature] = synthetic_df[feature].round()
 
-    # Decode one-hot encoded categorical features
+    # Explicitly convert the 'age' column to integers
+    if 'age' in synthetic_df.columns:
+        synthetic_df['age'] = synthetic_df['age'].astype(int)
+
+    # Round off the 'fare' column to 4 decimal points and ensure non-negative values
+    if 'fare' in synthetic_df.columns:
+        synthetic_df['fare'] = synthetic_df['fare'].round(4)
+        synthetic_df['fare'] = synthetic_df['fare'].clip(lower=0)
+
+    # Decode one-hot encoded categorical features manually
     for feature in categorical_features:
-        encoded_columns = encoder.get_feature_names_out([feature])
+        encoded_columns = [col for col in synthetic_df.columns if feature in col]
         synthetic_df[feature] = synthetic_df[encoded_columns].idxmax(axis=1).apply(lambda x: x.split('_')[-1])
         synthetic_df = synthetic_df.drop(columns=encoded_columns)
 
@@ -125,7 +137,7 @@ def generate_synthetic_data(generator, scaler, encoder, continuous_features, cat
 
 
 def main(file_path, input_dim=100, epochs=10000, batch_size=128, num_samples=1000):
-    data, scaler, encoder, continuous_features, categorical_features, encoded_cat_columns = load_and_preprocess_data(
+    data, scaler, encoder, continuous_features, categorical_features, encoded_cat_columns, original_df, original_cat_features = load_and_preprocess_data(
         file_path)
     output_dim = data.shape[1]
 
@@ -142,5 +154,5 @@ def main(file_path, input_dim=100, epochs=10000, batch_size=128, num_samples=100
 
 
 if __name__ == "__main__":
-    file_path = '/Users/rachana/tanpfn/data/dataset/Titanic.csv'
+    file_path = '/Users/rachana/tanpfn/data/dataset/Titanic.csv'  # Update this with your file path
     main(file_path)
