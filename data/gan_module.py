@@ -136,7 +136,7 @@ def generate_synthetic_data(generator, scaler, encoder, continuous_features, cat
     return synthetic_df
 
 
-def main(file_path, input_dim=100, epochs=10000, batch_size=128, num_samples=1000):
+def main(file_path, input_dim=10000, epochs=10000, batch_size=128, num_samples=1000):
     data, scaler, encoder, continuous_features, categorical_features, encoded_cat_columns, original_df, original_cat_features = load_and_preprocess_data(
         file_path)
     output_dim = data.shape[1]
