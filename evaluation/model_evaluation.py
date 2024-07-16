@@ -32,9 +32,6 @@ def auc_metric(target, pred, multi_class="ovo", numpy=False):
 
 
 def classification_performance_metrics(y_preds, y_true):
-    # y_preds have shape (sequence_length, classes)
-    # y_true has shape (sequence_length)
-
     metrics_dict = {}
 
     # Compute accuracy
@@ -54,6 +51,5 @@ def classification_performance_metrics(y_preds, y_true):
     # https://scikit-learn.org/stable/modules/generated/sklearn.metrics.log_loss.html
     log_loss_value = log_loss(y_pred=y_preds, y_true=y_true)
     metrics_dict["log_loss"] = log_loss_value
-
     # Return metrics as a dictionary
     return metrics_dict

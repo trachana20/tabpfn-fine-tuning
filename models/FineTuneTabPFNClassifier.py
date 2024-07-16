@@ -20,6 +20,14 @@ class FineTuneTabPFNClassifier:
         self.tabpfn_classifier.model_name = "FineTuneTabPFN"
 
     def fit(self, X, y):
+        print("FineTuneTabPFNClassifier: fit")
+        print("FineTuneTabPFNClassifier: X shape", X.shape)
+        print("FineTuneTabPFNClassifier: y shape", y.shape)
+        print("X"   , X)
+        print("y\n"   , y)
+        # change y to 1 if y is >0.5 else 0
+        y = [int(1) if i > 0.5 else int(0) for i in y]
+        print("y after\n", y)
         return self.tabpfn_classifier.fit(X=X, y=y)
 
     def predict(self, X):

@@ -137,7 +137,7 @@ class Trainer:
                 tabpfn_classifier=tabpfn_classifier,
                 tabpfn_model=tabpfn_model,
                 val_dataset=val_dataset,
-                train_dataset=train_loader.dataset,
+                # train_dataset=train_loader.dataset,
             )
 
         current_lowest_log_loss = validation_metrics["log_loss"]
@@ -272,7 +272,6 @@ class Trainer:
         tabpfn_classifier,
         tabpfn_model,
         val_dataset,
-        train_dataset,
     ):
         # for the validation we insert the nn.Module back into the tabpfnclassifier
         # instance so we mimic the exact way that TabPFN does predictions

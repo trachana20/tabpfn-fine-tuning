@@ -17,12 +17,148 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import DecisionTreeClassifier
 from tabpfn import TabPFNClassifier
 from torch.nn import CrossEntropyLoss
-from torch.optim import Adam
+from torch.optim import Adam, AdamW
 from torch.utils.data import DataLoader
 from utils import set_seed_globally
-
+from sklearn.neighbors import NearestNeighbors
+from sklearn.impute import SimpleImputer
 # Step 0: Define hyperparameters which are valid for all models and model
 # specific hyperparameters
+
+
+
+# def augment_dataset(df):
+#     augmented_data = df.copy()
+#     for i in range(len(df)):
+#         target_instance = df.iloc[i]
+#         augmented_features = augment_data_with_retrieval(df, target_instance)
+#         for col in augmented_features.index:
+#             augmented_data.at[i, col] = augmented_features[col]
+#     return augmented_data
+
+from sklearn.neighbors import NearestNeighbors
+import numpy as np
+import pandas as pd
+from sklearn.impute import SimpleImputer
+from sklearn.metrics.pairwise import cosine_similarity
+
+def calculate_cosine_similarity(X_train, X_test):
+    # Normalize X_train and X_test
+    X_train_normalized = X_train / np.linalg.norm(X_train, axis=1, keepdims=True)
+    X_test_normalized = X_test / np.linalg.norm(X_test, axis=1, keepdims=True)
+
+    # Compute cosine similarity between X_train and X_test
+    cosine_sim = cosine_similarity(X_test_normalized, X_train_normalized)
+
+    return cosine_sim
+
+# Function to augment X_train
+def augment_X_train(X_train, X_test, top_k=5):
+    # Calculate cosine similarity
+    cosine_sim = calculate_cosine_similarity(X_train.values, X_test.values)
+
+    # Initialize an empty array to store the augmented rows
+    augmented_rows = []
+
+    # Iterate through each row in X_test
+    for i in range(cosine_sim.shape[0]):
+        # Get indices of top k similar rows in X_train
+        top_indices = np.argsort(cosine_sim[i])[-top_k:][::]
+
+        # Calculate the mean of the top k rows
+        mean_row = np.mean(X_train.iloc[top_indices, :].values, axis=0)
+        
+        augmented_rows.append(mean_row)
+
+    # Append augmented_rows to X_train
+    X_train_augmented = np.vstack([X_train.values, augmented_rows])
+
+    # Convert back to DataFrame with original columns
+    X_train_augmented = pd.DataFrame(X_train_augmented, columns=X_train.columns)
+
+    return X_train_augmented
+
+def augment_dataset(train_data, test_data):
+    # Convert to DataFrame if needed
+    train_df = pd.DataFrame(train_data["data"])
+    test_df = pd.DataFrame(test_data["data"])
+
+    # Impute missing values
+    imputer = SimpleImputer(strategy='mean')
+    imputed_train_data = imputer.fit_transform(train_df)
+    imputed_test_data = imputer.transform(test_df)
+
+    # Convert back to DataFrame to ensure compatibility with augment_X_train
+    train_df = pd.DataFrame(imputed_train_data, columns=train_df.columns)
+    test_df = pd.DataFrame(imputed_test_data, columns=test_df.columns)
+
+    # Ensure no NaN values after imputation
+    assert not train_df.isnull().values.any(), "Train DataFrame contains NaN values after imputation"
+    assert not test_df.isnull().values.any(), "Test DataFrame contains NaN values after imputation"
+
+    # Augment train data
+    augmented_df = augment_X_train(train_df, test_df)
+
+    # Check if augmented DataFrame contains NaN values
+    if augmented_df.isnull().values.any():
+        print("DataFrame contains NaN values after augmentation")
+    else:
+        print("DataFrame does not contain NaN values after augmentation")
+
+    train_data["data"] = augmented_df
+
+    if "survived" in train_data["data"].columns:
+    # for every row in train data [data] change the survived column to 1 if the value is greater than 0.5
+        train_data["data"]["survived"] = train_data["data"]["survived"].apply(lambda x: 1 if x > 0.5 else 0)
+        print("train data after augmentation", train_data["data"])
+    return train_data
+
+
+# Example usage:
+# Assuming X_train and X_test are pandas DataFrames
+# X_train = pd.DataFrame([[1, 2, 3, 10], [4, 5, 6, 20], [7, 8, 9, 30], [1, 2, 3, 10], [1.5, 2.5, 3.5, 12], [1.9, 2.52, 3.45, 15]], columns=['A', 'B', 'C', 'target'])
+# print(X_train)
+# X_test = pd.DataFrame([[0.5, 1.5, 2.5]], columns=['A', 'B', 'C'])
+
+# X_train_augmented = augment_X_train(X_train, X_test)
+
+# # Print the augmented X_train
+# print(X_train_augmented)
+
+
+
+# def retrieve_similar_data(data, target_instance, n_neighbors=5):
+#     # Ensure data is a DataFrame
+#     data = pd.DataFrame(data)
+#     # Using Nearest Neighbors to find similar instances
+#     neighbors = NearestNeighbors(n_neighbors=n_neighbors)
+#     neighbors.fit(data)
+#     # Finding the nearest neighbors for the target instance
+#     distances, indices = neighbors.kneighbors([target_instance])
+#     similar_data = data.iloc[indices[0]]
+#     return similar_data
+
+# def augment_data_with_retrieval(data, target_instance):
+#     augmented_data = data.copy()
+#     # if 'survived' in augmented_data.columns:
+#     #     augmented_data = augmented_data.drop(columns=['survived'])
+#     augmented_rows = []
+#     for i in range(len(target_instance)):
+#         # if 'survived' in data.columns:
+#         #     target_instance = data.drop(columns=['survived']).iloc[i]
+#         # else:
+#         target_instance = target_instance.iloc[i]
+#         similar_data = retrieve_similar_data(augmented_data, target_instance)
+#         if 'survived' in similar_data.columns:
+#             similar_data = similar_data.drop(columns=['survived'])
+#         augmented_features = similar_data.mean()
+#         augmented_rows = augmented_rows.append(augmented_features, ignore_index=True)
+#     augmented_data.append(augmented_rows, ignore_index=True)
+#     if 'survived' in data.columns:
+#         augmented_data['survived'] = data['survived']
+#     return augmented_data
+
+
 
 setup_config = {
     "project_name": "Finetune-TabPFN",
@@ -32,7 +168,7 @@ setup_config = {
     # val_size is percentage w.r.t. the total dataset-rows ]0,1[
     "val_size": 0.2,
     "num_workers": 0,
-    "dataset_mapping": {168746: "Titanic", 9982: "Dress-Sales"},
+    "dataset_mapping": {168746: "Titanic"},
     "log_wandb": False,
     "models": {
         "FineTuneTabPFNClassifier_full_weight": FineTuneTabPFNClassifier,
@@ -60,11 +196,11 @@ modelkwargs_dict = {
             "fine_tune_type": "full_weight_fine_tuning",
         },
         "training": {
-            "epochs": 1000,
-            "batch_size": 2,
-            "learning_rate": 1e-6,
+            "epochs": 10,
+            "batch_size": 16,
+            "learning_rate": 1e-3,
             "criterion": CrossEntropyLoss,
-            "optimizer": Adam,
+            "optimizer": AdamW,
             "early_stopping_threshold": 0.1,
         },
     },
@@ -87,8 +223,8 @@ trainer = Trainer(visualizer=visualizer)
 results_df = None
 
 
-if os.path.exists(f"{setup_config['results_path']}results_df.pkl"):
-    results_df = pd.read_pickle(f"{setup_config['results_path']}results_df.pkl")
+if os.path.exists(f"{setup_config['results_path']}results_df_rag_50ep1.pkl"):
+    results_df = pd.read_pickle(f"{setup_config['results_path']}results_df_rag_50ep1.pkl")
 else:
     # Step 2: run the evaluation and training loop
     # ---------- ---------- ---------- ---------- ---------- ---------- RANDOM STATES LOOP
@@ -113,7 +249,6 @@ else:
                 train_data = fold["train"]
                 val_data = fold["val"]
                 test_data = fold["test"]
-
                 # iterate over all models and train on fold
                 # ---------- ---------- ---------- ---------- ----------  MODEL LOOP
                 for model_name, model_fn in setup_config["models"].items():
@@ -128,12 +263,11 @@ else:
                         "training",
                         {},
                     )
-
-                    train_dataset = RealDataDataset(
-                        data=train_data["data"],
-                        target=train_data["target"],
-                        name=train_data["name"],
-                    )
+                    # train_dataset = RealDataDataset(
+                    #     data=train_data["data"],
+                    #     target=train_data["target"],
+                    #     name=train_data["name"],
+                    # )
 
                     # validation and test data is never augmented
                     val_dataset = RealDataDataset(
@@ -147,7 +281,6 @@ else:
                         target=test_data["target"],
                         name=test_data["name"],
                     )
-
                     if "FineTuneTabPFNClassifier" in model_name:
                         for augmentation, augmentation_fn in setup_config[
                             "dataset_augmentations"
@@ -167,11 +300,22 @@ else:
 
                             # depending on the setting we augment the training data via
                             # different methods. Therefore we overwrite the train_dataset
+                            # train_dataset = augmentation_fn(
+                            #     data=train_data["data"],
+                            #     target=train_data["target"],
+                            #     name=train_data["name"],
+                            train_data = augment_dataset(train_data, test_data)
                             train_dataset = augmentation_fn(
                                 data=train_data["data"],
                                 target=train_data["target"],
                                 name=train_data["name"],
                             )
+                            # train_dataset = RealDataDataset(
+                            #     data=train_dataset["data"],
+                            #     target=train_dataset["target"],
+                            #     name=train_dataset["name"],
+                            # )
+
 
                             batch_size = augmentation_kwargs.get(
                                 "batch_size",
@@ -190,6 +334,7 @@ else:
                                     num_workers=0,
                                     collate_fn=train_dataset._collate_fn,
                                     batch_size=batch_size,
+                                    # train_dataset=train_dataset,
                                 ),
                                 val_dataset=val_dataset,
                                 fine_tune_type=model_architectural_kwargs[
@@ -199,7 +344,8 @@ else:
                                 fine_tuning_configuration=fine_tuning_configuration,
                                 **modelkwargs_dict.get(model_name, {}),
                             )
-
+                            print("#$$$$$$$$$$$$$$$ model training doneee #######")
+                            print("$$$$$$$$$$ test dataset 2222", test_dataset[0])
                             # evaluate the model given the right setting
                             trained_model, performance_metrics = (
                                 evaluator.fit_and_predict_model(
@@ -213,6 +359,7 @@ else:
                                 )
                             )
                             # add settings to performance metrics dictionary
+                            print("#$$$$$$$$$$$$$$$ test results are here #######", performance_metrics)
                             fine_tuning_configuration.update(performance_metrics)
 
                             if results_df is None:
@@ -224,7 +371,7 @@ else:
                     else:
                         # create a model which uses modelkwargs
                         model = model_fn(**model_architectural_kwargs)
-
+                        # print 
                         # evaluate the model given the right setting
                         trained_model, performance_metrics = (
                             evaluator.fit_and_predict_model(
@@ -253,11 +400,11 @@ else:
                         results_df = pd.DataFrame([performance_metrics])
                     else:
                         results_df.loc[len(results_df)] = performance_metrics
-
+    print("#######################################")
     visualizer.save_training_logs_as_csv()
 
     os.makedirs(f"{setup_config['results_path']}", exist_ok=True)
-    results_df.to_pickle(f"{setup_config['results_path']}results_df.pkl")
+    results_df.to_pickle(f"{setup_config['results_path']}results_df_rag_50ep.pkl")
     visualizer.save_results()
 
 
