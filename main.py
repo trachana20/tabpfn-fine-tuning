@@ -78,7 +78,7 @@ def augment_X_train(X_train, X_test, top_k=5):
 
     return X_train_augmented
 
-def augment_dataset(train_data, test_data):
+def augment_dataset(train_data, test_data, target_instance):
     # Convert to DataFrame if needed
     train_df = pd.DataFrame(train_data["data"])
     test_df = pd.DataFrame(test_data["data"])
@@ -105,25 +105,12 @@ def augment_dataset(train_data, test_data):
     else:
         print("DataFrame does not contain NaN values after augmentation")
 
-    train_data["data"] = augmented_df
-
-    if "survived" in train_data["data"].columns:
+    if str(target_instance) in augmented_df.columns:
     # for every row in train data [data] change the survived column to 1 if the value is greater than 0.5
-        train_data["data"]["survived"] = train_data["data"]["survived"].apply(lambda x: 1 if x > 0.5 else 0)
-        print("train data after augmentation", train_data["data"])
+        augmented_df[target_instance] = augmented_df[target_instance].apply(lambda x: 1 if x > 0.5 else 0)
+        # train_data["data"][target_instance] = train_data["data"][target_instance].apply(lambda x: int(1) if x > 0.5 else int(0))
+    train_data["data"] = augmented_df
     return train_data
-
-
-# Example usage:
-# Assuming X_train and X_test are pandas DataFrames
-# X_train = pd.DataFrame([[1, 2, 3, 10], [4, 5, 6, 20], [7, 8, 9, 30], [1, 2, 3, 10], [1.5, 2.5, 3.5, 12], [1.9, 2.52, 3.45, 15]], columns=['A', 'B', 'C', 'target'])
-# print(X_train)
-# X_test = pd.DataFrame([[0.5, 1.5, 2.5]], columns=['A', 'B', 'C'])
-
-# X_train_augmented = augment_X_train(X_train, X_test)
-
-# # Print the augmented X_train
-# print(X_train_augmented)
 
 
 
@@ -168,7 +155,7 @@ setup_config = {
     # val_size is percentage w.r.t. the total dataset-rows ]0,1[
     "val_size": 0.2,
     "num_workers": 0,
-    "dataset_mapping": {168746: "Titanic"},
+    "dataset_mapping": {168746: "Titanic", 9982:"Dress-Sales"},
     "log_wandb": False,
     "models": {
         "FineTuneTabPFNClassifier_full_weight": FineTuneTabPFNClassifier,
@@ -196,11 +183,11 @@ modelkwargs_dict = {
             "fine_tune_type": "full_weight_fine_tuning",
         },
         "training": {
-            "epochs": 10,
-            "batch_size": 16,
-            "learning_rate": 1e-3,
+            "epochs": 100,
+            "batch_size": 2,
+            "learning_rate": 1e-6,
             "criterion": CrossEntropyLoss,
-            "optimizer": AdamW,
+            "optimizer": Adam,
             "early_stopping_threshold": 0.1,
         },
     },
@@ -223,8 +210,8 @@ trainer = Trainer(visualizer=visualizer)
 results_df = None
 
 
-if os.path.exists(f"{setup_config['results_path']}results_df_rag_50ep1.pkl"):
-    results_df = pd.read_pickle(f"{setup_config['results_path']}results_df_rag_50ep1.pkl")
+if os.path.exists(f"{setup_config['results_path']}results_df_rag_100ep1_baseline.pkl"):
+    results_df = pd.read_pickle(f"{setup_config['results_path']}results_df_rag_100ep1_baseline.pkl")
 else:
     # Step 2: run the evaluation and training loop
     # ---------- ---------- ---------- ---------- ---------- ---------- RANDOM STATES LOOP
@@ -304,7 +291,7 @@ else:
                             #     data=train_data["data"],
                             #     target=train_data["target"],
                             #     name=train_data["name"],
-                            train_data = augment_dataset(train_data, test_data)
+                            train_data = augment_dataset(train_data, test_data, train_data["target"])
                             train_dataset = augmentation_fn(
                                 data=train_data["data"],
                                 target=train_data["target"],
@@ -344,8 +331,6 @@ else:
                                 fine_tuning_configuration=fine_tuning_configuration,
                                 **modelkwargs_dict.get(model_name, {}),
                             )
-                            print("#$$$$$$$$$$$$$$$ model training doneee #######")
-                            print("$$$$$$$$$$ test dataset 2222", test_dataset[0])
                             # evaluate the model given the right setting
                             trained_model, performance_metrics = (
                                 evaluator.fit_and_predict_model(
@@ -359,7 +344,6 @@ else:
                                 )
                             )
                             # add settings to performance metrics dictionary
-                            print("#$$$$$$$$$$$$$$$ test results are here #######", performance_metrics)
                             fine_tuning_configuration.update(performance_metrics)
 
                             if results_df is None:
@@ -371,7 +355,6 @@ else:
                     else:
                         # create a model which uses modelkwargs
                         model = model_fn(**model_architectural_kwargs)
-                        # print 
                         # evaluate the model given the right setting
                         trained_model, performance_metrics = (
                             evaluator.fit_and_predict_model(
@@ -400,12 +383,11 @@ else:
                         results_df = pd.DataFrame([performance_metrics])
                     else:
                         results_df.loc[len(results_df)] = performance_metrics
-    print("#######################################")
     visualizer.save_training_logs_as_csv()
 
     os.makedirs(f"{setup_config['results_path']}", exist_ok=True)
-    results_df.to_pickle(f"{setup_config['results_path']}results_df_rag_50ep.pkl")
-    visualizer.save_results()
+    results_df.to_pickle(f"{setup_config['results_path']}results_df_rag_100ep1_baseline.pkl")
+    visualizer.save_training_logs_as_csv()
 
 
 # ----------------- Visualize results -----------------

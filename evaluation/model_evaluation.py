@@ -39,8 +39,17 @@ def classification_performance_metrics(y_preds, y_true):
     metrics_dict["accuracy"] = accuracy
 
     # Compute AUC (Area Under Curve)
-
-    auc = auc_metric(target=y_true, pred=y_preds).item()
+    target = y_true
+    pred = np.argmax(y_preds, axis=1)
+    target = np.array(target) if not isinstance(target, np.ndarray) else target
+    pred = np.array(pred) if not isinstance(pred, np.ndarray) else pred
+    
+    # Convert to torch tensors
+    target = torch.tensor(target) if not torch.is_tensor(target) else target
+    pred = torch.tensor(pred) if not torch.is_tensor(pred) else pred
+    
+    # auc = auc_metric(target=y_true, pred=np.argmax(y_preds, axis=1))
+    auc = roc_auc_score(target.cpu().numpy(), pred.cpu().numpy())
     metrics_dict["auc"] = auc
 
     # Compute F1 score
