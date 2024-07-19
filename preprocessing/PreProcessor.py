@@ -32,6 +32,7 @@ class PreProcessor:
         target: str,
         categorical_indicator: list,
         attribute_names: list,
+        name = None
     ):
         # Drop rows where target is missing, because we can't learn from them
         train_data, val_data, test_data = self.drop_row_where_taget_is_missing(
@@ -49,14 +50,20 @@ class PreProcessor:
         )
 
         # Get categorical and numerical features using list comprehension and zip
-        categorical_features, numerical_features = (
-            self.get_categorical_and_numerical_features(
-                train_data=train_data,
-                categorical_indicator=categorical_indicator,
-                attribute_names=attribute_names,
-                target=target,
-            )
-        )
+        # categorical_features, numerical_features = (
+        #     self.get_categorical_and_numerical_features(
+        #         train_data=train_data,
+        #         categorical_indicator=categorical_indicator,
+        #         attribute_names=attribute_names,
+        #         target=target,
+        #     )
+        # )
+        if name == "Titanic":
+            categorical_features = ['survived', 'sex']
+            numerical_features = ['age', 'sibsp', 'parch', 'who','sex', 'embarked', 'class', 'alone']
+        else:
+            categorical_features = ['Class', 'V2', 'V3', 'V5', 'V6',  'V7']
+            numerical_features = ['V4']
         train_data, val_data, test_data = self.drop_constant_categorical_features(
             train_data=train_data,
             val_data=val_data,
@@ -132,6 +139,8 @@ class PreProcessor:
         test_data,
         categorical_features,
     ):
+
+        print(f"Checking feature: {categorical_features}")
         for cat_feature in categorical_features:
             # Check if the feature has more than one unique value in the training data
             num_unique = train_data[cat_feature].nunique()
@@ -151,6 +160,8 @@ class PreProcessor:
         test_data,
         categorical_features,
     ):
+
+        print(f"Checking feature: {categorical_features}")
         for cat_feature in categorical_features[:]:
             num_unique_values = train_data[cat_feature].nunique()
             len_data = len(train_data)

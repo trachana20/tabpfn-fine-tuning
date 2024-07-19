@@ -156,6 +156,7 @@ setup_config = {
     "val_size": 0.2,
     "num_workers": 0,
     "dataset_mapping": {168746: "Titanic", 9982:"Dress-Sales"},
+    # "dataset_mapping":{0: "manual_dataset"},
     "log_wandb": False,
     "models": {
         "FineTuneTabPFNClassifier_full_weight": FineTuneTabPFNClassifier,
@@ -222,10 +223,15 @@ else:
         for dataset_id, dataset_name in setup_config["dataset_mapping"].items():
             # Step 3: Load  data
             data_manager = DataManager(
-                dir_path="data/dataset",
+                dir_path="/Users/anshulg954/Desktop/sose24/dllab/tabpfn-fine-tuning/data/dataset/synthetic_data_with_20000_epochs.csv",
                 dataset_id=dataset_id,
             )
+            data_df, target = data_manager.load_manual_dataset("survived")
             data_k_folded = data_manager.k_fold_train_test_split(
+                data_df=data_df,
+                name = dataset_name,
+                categorical_columns=['survived', 'sex'] if dataset_name == "Titanic" else ['Class', 'V2', 'V3', 'V5', 'V6', 'V7'],
+                target=target,
                 k_folds=setup_config["k_folds"],
                 val_size=setup_config["val_size"],
                 random_state=random_state,
