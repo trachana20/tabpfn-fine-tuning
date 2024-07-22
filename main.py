@@ -80,14 +80,13 @@ def augment_X_train(X_train, X_test, top_k=5):
 
 def augment_dataset(train_data, test_data, target_instance):
     # Convert to DataFrame if needed
-    train_df = pd.DataFrame(train_data["data"])
-    test_df = pd.DataFrame(test_data["data"])
-
+    train_df = pd.DataFrame(train_data["data"], columns=train_data["data"].columns)
+    test_df = pd.DataFrame(test_data["data"], columns=test_data["data"].columns)
+    test_df = test_df[train_df.columns]
     # Impute missing values
     imputer = SimpleImputer(strategy='mean')
-    imputed_train_data = imputer.fit_transform(train_df)
+    imputed_train_data = imputer.fit_transform(train_df, test_df.columns)
     imputed_test_data = imputer.transform(test_df)
-
     # Convert back to DataFrame to ensure compatibility with augment_X_train
     train_df = pd.DataFrame(imputed_train_data, columns=train_df.columns)
     test_df = pd.DataFrame(imputed_test_data, columns=test_df.columns)
@@ -113,40 +112,7 @@ def augment_dataset(train_data, test_data, target_instance):
     return train_data
 
 
-
-# def retrieve_similar_data(data, target_instance, n_neighbors=5):
-#     # Ensure data is a DataFrame
-#     data = pd.DataFrame(data)
-#     # Using Nearest Neighbors to find similar instances
-#     neighbors = NearestNeighbors(n_neighbors=n_neighbors)
-#     neighbors.fit(data)
-#     # Finding the nearest neighbors for the target instance
-#     distances, indices = neighbors.kneighbors([target_instance])
-#     similar_data = data.iloc[indices[0]]
-#     return similar_data
-
-# def augment_data_with_retrieval(data, target_instance):
-#     augmented_data = data.copy()
-#     # if 'survived' in augmented_data.columns:
-#     #     augmented_data = augmented_data.drop(columns=['survived'])
-#     augmented_rows = []
-#     for i in range(len(target_instance)):
-#         # if 'survived' in data.columns:
-#         #     target_instance = data.drop(columns=['survived']).iloc[i]
-#         # else:
-#         target_instance = target_instance.iloc[i]
-#         similar_data = retrieve_similar_data(augmented_data, target_instance)
-#         if 'survived' in similar_data.columns:
-#             similar_data = similar_data.drop(columns=['survived'])
-#         augmented_features = similar_data.mean()
-#         augmented_rows = augmented_rows.append(augmented_features, ignore_index=True)
-#     augmented_data.append(augmented_rows, ignore_index=True)
-#     if 'survived' in data.columns:
-#         augmented_data['survived'] = data['survived']
-#     return augmented_data
-
-
-
+# 9982:"Dress-Sales"
 setup_config = {
     "project_name": "Finetune-TabPFN",
     "results_path": "results/",
@@ -155,8 +121,8 @@ setup_config = {
     # val_size is percentage w.r.t. the total dataset-rows ]0,1[
     "val_size": 0.2,
     "num_workers": 0,
-    "dataset_mapping": {168746: "Titanic", 9982:"Dress-Sales"},
-    # "dataset_mapping":{0: "manual_dataset"},
+    "dataset_mapping": {168746: "Titanic"},
+    # "dataset_mapping":{0: "Titanic"},
     "log_wandb": False,
     "models": {
         "FineTuneTabPFNClassifier_full_weight": FineTuneTabPFNClassifier,
@@ -164,6 +130,7 @@ setup_config = {
         "DecisionTreeClassifier": DecisionTreeClassifier,
         "TabPFNClassifier": TabPFNClassifier,
     },
+    "categorical_columns": ['survived', 'sex', 'embarked'],
     "dataset_augmentations": {"FullRealDataDataset": FullRealDataDataset},
     "device": "cuda" if torch.cuda.is_available() else "cpu",
 }
@@ -223,15 +190,10 @@ else:
         for dataset_id, dataset_name in setup_config["dataset_mapping"].items():
             # Step 3: Load  data
             data_manager = DataManager(
-                dir_path="/Users/anshulg954/Desktop/sose24/dllab/tabpfn-fine-tuning/data/dataset/synthetic_data_with_20000_epochs.csv",
-                dataset_id=dataset_id,
+                dir_path="/Users/anshulg954/Desktop/sose24/dllab/tabpfn-fine-tuning/data/dataset/synthetic_data_titanic.csv",
+                dataset_id=dataset_id if dataset_id != 0 else None,
             )
-            data_df, target = data_manager.load_manual_dataset("survived")
             data_k_folded = data_manager.k_fold_train_test_split(
-                data_df=data_df,
-                name = dataset_name,
-                categorical_columns=['survived', 'sex'] if dataset_name == "Titanic" else ['Class', 'V2', 'V3', 'V5', 'V6', 'V7'],
-                target=target,
                 k_folds=setup_config["k_folds"],
                 val_size=setup_config["val_size"],
                 random_state=random_state,
@@ -297,7 +259,7 @@ else:
                             #     data=train_data["data"],
                             #     target=train_data["target"],
                             #     name=train_data["name"],
-                            train_data = augment_dataset(train_data, test_data, train_data["target"])
+                            # train_data = augment_dataset(train_data, test_data, train_data["target"])
                             train_dataset = augmentation_fn(
                                 data=train_data["data"],
                                 target=train_data["target"],

@@ -9,7 +9,9 @@ from sklearn.preprocessing import (
     QuantileTransformer,
     StandardScaler,
 )
-
+from sklearn.neighbors import NearestNeighbors
+from sklearn.impute import SimpleImputer
+from sklearn.metrics.pairwise import cosine_similarity
 
 class PreProcessor:
     def __init__(
@@ -50,20 +52,20 @@ class PreProcessor:
         )
 
         # Get categorical and numerical features using list comprehension and zip
-        # categorical_features, numerical_features = (
-        #     self.get_categorical_and_numerical_features(
-        #         train_data=train_data,
-        #         categorical_indicator=categorical_indicator,
-        #         attribute_names=attribute_names,
-        #         target=target,
-        #     )
-        # )
-        if name == "Titanic":
-            categorical_features = ['survived', 'sex']
-            numerical_features = ['age', 'sibsp', 'parch', 'who','sex', 'embarked', 'class', 'alone']
-        else:
-            categorical_features = ['Class', 'V2', 'V3', 'V5', 'V6',  'V7']
-            numerical_features = ['V4']
+        categorical_features, numerical_features = (
+            self.get_categorical_and_numerical_features(
+                train_data=train_data,
+                categorical_indicator=categorical_indicator,
+                attribute_names=attribute_names,
+                target=target,
+            )
+        )
+        # if name == "Titanic":
+        #     categorical_features = ['survived', 'sex']
+        #     numerical_features = ['age', 'sibsp', 'parch', 'who','sex', 'embarked', 'class', 'alone']
+        # else:
+        #     categorical_features = ['Class', 'V2', 'V3', 'V5', 'V6',  'V7']
+        #     numerical_features = ['V4']
         train_data, val_data, test_data = self.drop_constant_categorical_features(
             train_data=train_data,
             val_data=val_data,
@@ -77,7 +79,6 @@ class PreProcessor:
             test_data=test_data,
             categorical_features=categorical_features,
         )
-
         train_data, val_data, test_data = self.impute_missing_values(
             train_data=train_data,
             val_data=val_data,
@@ -140,7 +141,6 @@ class PreProcessor:
         categorical_features,
     ):
 
-        print(f"Checking feature: {categorical_features}")
         for cat_feature in categorical_features:
             # Check if the feature has more than one unique value in the training data
             num_unique = train_data[cat_feature].nunique()
@@ -160,8 +160,6 @@ class PreProcessor:
         test_data,
         categorical_features,
     ):
-
-        print(f"Checking feature: {categorical_features}")
         for cat_feature in categorical_features[:]:
             num_unique_values = train_data[cat_feature].nunique()
             len_data = len(train_data)
@@ -408,3 +406,79 @@ class PreProcessor:
         else:
             raise ValueError("Invalid data transformer type")
         return train_data, val_data, test_data
+
+    def calculate_cosine_similarity(self, X_train, X_test):
+        # Normalize X_train and X_test
+        X_train_normalized = X_train / np.linalg.norm(X_train, axis=1, keepdims=True)
+        X_test_normalized = X_test / np.linalg.norm(X_test, axis=1, keepdims=True)
+
+        # Compute cosine similarity between X_train and X_test
+        cosine_sim = cosine_similarity(X_test_normalized, X_train_normalized)
+
+        return cosine_sim
+
+    # Function to augment X_train
+    def augment_X_train(self, X_train, X_test, top_k=5):
+        # Calculate cosine similarity
+        cosine_sim = self.calculate_cosine_similarity(X_train.values, X_test.values)
+
+        # Initialize an empty array to store the augmented rows
+        augmented_rows = []
+
+        # Iterate through each row in X_test
+        for i in range(cosine_sim.shape[0]):
+            # Get indices of top k similar rows in X_train
+            top_indices = np.argsort(cosine_sim[i])[-top_k:][::]
+
+            # Calculate the mean of the top k rows
+            mean_row = np.mean(X_train.iloc[top_indices, :].values, axis=0)
+            
+            augmented_rows.append(mean_row)
+
+        # Append augmented_rows to X_train
+        X_train_augmented = np.vstack([X_train.values, augmented_rows])
+
+        # Convert back to DataFrame with original columns
+        X_train_augmented = pd.DataFrame(X_train_augmented, columns=X_train.columns)
+
+        return X_train_augmented
+
+    def augment_dataset(self, train_data, test_data, target_instance):
+        # Convert to DataFrame if needed
+        train_df = pd.DataFrame(train_data, columns=train_data.columns)
+        print(train_df.head())
+        test_df = pd.DataFrame(test_data, columns=test_data.columns)
+        test_df = test_df[train_df.columns]
+        # Impute missing values
+        # Separate numeric and non-numeric columns
+        numeric_cols = train_data.select_dtypes(include=['number']).columns
+        non_numeric_cols = train_df.select_dtypes(exclude=['number']).columns
+        
+        # Impute missing values for numeric columns
+        numeric_imputer = SimpleImputer(strategy='mean')
+        imputed_train_numeric = numeric_imputer.fit_transform(train_df[numeric_cols])
+        imputed_test_numeric = numeric_imputer.transform(test_df[numeric_cols])
+        
+        # Combine the imputed numeric and non-numeric data
+        imputed_train_df = pd.DataFrame(imputed_train_numeric, columns=numeric_cols)
+        imputed_test_df = pd.DataFrame(imputed_test_numeric, columns=numeric_cols)
+
+        # Ensure no NaN values after imputation
+        assert not imputed_train_df.isnull().values.any(), "Train DataFrame contains NaN values after imputation"
+        assert not imputed_test_df.isnull().values.any(), "Test DataFrame contains NaN values after imputation"
+
+        # Augment train data
+        augmented_df = self.augment_X_train(imputed_train_df, imputed_test_df)
+
+        # Check if augmented DataFrame contains NaN values
+        if augmented_df.isnull().values.any():
+            print("DataFrame contains NaN values after augmentation")
+        else:
+            print("DataFrame does not contain NaN values after augmentation")
+
+        if str(target_instance) in augmented_df.columns:
+        # for every row in train data [data] change the survived column to 1 if the value is greater than 0.5
+            augmented_df[target_instance] = augmented_df[target_instance].apply(lambda x: 1 if x > 0.5 else 0)
+            # train_data["data"][target_instance] = train_data["data"][target_instance].apply(lambda x: int(1) if x > 0.5 else int(0))
+        train_data = augmented_df
+        return train_data

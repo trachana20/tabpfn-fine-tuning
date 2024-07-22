@@ -40,10 +40,10 @@ class DataManager:
         self.results_path = f"{dir_path}/fine_tune_results"
         self.preprocessor = PreProcessor()
 
-    def load_manual_dataset(self, target: str) -> pd.DataFrame:
+    def load_manual_dataset(self) -> pd.DataFrame:
         """Load a dataset from a local file."""
         data_df = pd.read_csv(self.dir_path)
-        return data_df, target
+        return data_df
 
     def split_train_test_validation(
         self,
@@ -85,39 +85,52 @@ class DataManager:
         return train_data, val_data, test_data
 
     # ----- ----- ----- ----- ----- create k-fold splits (strategy: StratifiedKFold)
-    def k_fold_train_test_split(self, k_folds, val_size, random_state, data_df = None, target=None, name=None, categorical_columns=None):
+    def k_fold_train_test_split(self, k_folds, val_size, random_state):
         # Preprocess the data (Missing values, encoding, outliers, scaling,...)
         task_splits = None
-        if self.dataset_id is not None:
-            task = openml.tasks.get_task(
-                task_id=self.dataset_id,
-                download_qualities=True,
-                download_features_meta_data=True,
-                download_splits=True,
-                download_data=True,
-            )
-            # ignore future warning! We use version, where defaults are correct
-            dataset = task.get_dataset()
-            target = task.target_name
-            name = dataset.name
+        datasets = []
+        task = openml.tasks.get_task(
+            task_id=self.dataset_id,
+            download_qualities=True,
+            download_features_meta_data=True,
+            download_splits=True,
+            download_data=True,
+        )
+        # ignore future warning! We use version, where defaults are correct
+        dataset = task.get_dataset()
+        target = task.target_name
+        name = dataset.name
 
-            data_df, _, categorical_indicator, attribute_names = dataset.get_data(
-                dataset_format="dataframe",
-            )
-            print(f"Dataframe: {data_df}")
-            data_df.to_csv(f"{name}.csv")
-            # List to store datasets
-            datasets = []
+        data_df, _, categorical_indicator, attribute_names = dataset.get_data(
+            dataset_format="dataframe",
+        )
+        #perform augmentation on the dataset i.e. do cosine similarity with the manual dataset and add the most similar rows to the dataset
+        # Use the augmented dataset as the previous dataset and continue with the process
 
-            task_splits = task.download_split()
-        else:
+        task_splits = task.download_split()
+        test_indices = [task_splits.get(repeat=0, fold=i, sample=0).test for i in range(task_splits.folds)]
+        test_data_df = data_df.iloc[test_indices[0]]
+        # get the dataset without the test data
+        manual_dataset = self.load_manual_dataset()
+        # preprocess manual dataset
+        manual_dataset, _, _ = self.preprocessor.preprocess(
+            train_data=manual_dataset,
+            val_data=manual_dataset,
+            test_data=manual_dataset,
+            target=target,
+            categorical_indicator=categorical_indicator,
+            attribute_names=attribute_names,
             name = name
-            categorical_indicator = categorical_columns
-            attribute_names = list(data_df.columns)
-            # get categorical indicator as list [True if feature is categorical else false] and attribute names from data_df header
-            # categorical_indicator = [data_df[col].dtype == "object" for col in data_df.columns]
-            print(f"Loaded dataset: {name}, Categories: {categorical_indicator}, attribute_names: {attribute_names}\n, target: {target},\n")
-            print("\nDistinct values in each feature before preprocessing:")
+        )
+
+        # on train_data_df perform cosine similarity with manual_dataset
+        # add the most similar rows to the train_data_df
+        # perform basic prerocessing on the train_data_df and manual_dataset : 
+        # if manual_dataset is not None:
+        #     #perform augmentation using method in augmentations.py
+        #     train_data_df = self.preprocessor.augment_dataset(train_data_df, manual_dataset, target)
+        #     task_splits = None
+            
         if task_splits is not None:
             for repeat in range(task_splits.repeats):
                 for fold in range(task_splits.folds):
@@ -144,6 +157,12 @@ class DataManager:
                             categorical_indicator=categorical_indicator,
                             attribute_names=attribute_names,
                         )
+                        # perform augmentation on the dataset i.e. do cosine similarity with the manual dataset and add the most similar rows to the dataset
+                        # Use the augmented dataset as the previous dataset and continue with the process
+                        train_data = self.preprocessor.augment_dataset(train_data, manual_dataset, target)
+                        print(train_data.shape)
+                        print(val_data.shape)
+                        print(test_data.shape)
                         datasets.append(
                             {
                                 "train": {
@@ -174,10 +193,11 @@ class DataManager:
             x_data = data_df.drop(columns=[target])
             y_data = data_df[target]
             # Iterate through StratifiedKFold splits
+            
             for train_index, test_index in kf.split(x_data, y_data):
                 # Create CustomDataset instances and append to datasets list
-                train_data, val_data, test_data = self.split_train_test_validation(
-                    data_df=data_df,
+                train_data, val_data, _ = self.split_train_test_validation(
+                    data_df=train_data_df,
                     test_index=test_index,
                     train_index=train_index,
                     val_size=val_size,
@@ -185,12 +205,7 @@ class DataManager:
                     name=name,
                     random_state=random_state,
                 )
-                for col in train_data.columns:
-                    print(f"Train {col}: {train_data[col].unique()}")
-                for col in val_data.columns:
-                    print(f"Val {col}: {val_data[col].unique()}")
-                for col in test_data.columns:
-                    print(f"Test {col}: {test_data[col].unique()}")
+                test_data = test_data_df
                 train_data, val_data, test_data = self.preprocessor.preprocess(
                     train_data=train_data,
                     val_data=val_data,
