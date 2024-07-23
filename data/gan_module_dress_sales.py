@@ -4,8 +4,25 @@ from sklearn.preprocessing import StandardScaler, OneHotEncoder
 import tensorflow as tf
 from tensorflow.keras import layers, Model
 
+
 def load_and_preprocess_data(file_path):
     df = pd.read_csv(file_path)
+
+    # Extract column names and their categories/types
+    column_info = df.columns
+    continuous_features = []
+    categorical_features = []
+
+    for col in column_info:
+        col_parts = col.split(",")
+        col_name = col_parts[0][2:-1]  # Extract the column name
+        col_values = col_parts[1][2:-2].replace("'", "").split(", ")  # Extract the column values or type
+
+        if len(col_values) == 1 and col_values[0] == 'NUMERIC':
+            continuous_features.append(col_name)
+        else:
+            categorical_features.append(col_name)
+        df.rename(columns={col: col_name}, inplace=True)
 
     for column in df.columns:
         if df[column].dtype == 'object' or len(df[column].unique()) < 10:
@@ -13,22 +30,13 @@ def load_and_preprocess_data(file_path):
         else:
             df[column] = df[column].fillna(df[column].median())
 
-    continuous_features = []
-    categorical_features = []
-
-    for column in df.columns:
-        if df[column].dtype == 'object' or len(df[column].unique()) < 10:
-            categorical_features.append(column)
-        else:
-            continuous_features.append(column)
-
-    # But I dont think there are any continous(Numerical) features in dress-sales atleast
     scaler = StandardScaler()
-    df[continuous_features] = scaler.fit_transform(df[continuous_features])
-
+    if continuous_features:
+        df[continuous_features] = scaler.fit_transform(df[continuous_features])
 
     encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
-    encoded_cats = encoder.fit_transform(df[categorical_features].astype(str))  # Ensure all categorical data is string type
+    encoded_cats = encoder.fit_transform(
+        df[categorical_features].astype(str))  # Ensure all categorical data is string type
     encoded_cat_columns = encoder.get_feature_names_out(categorical_features)
 
     df = df.drop(columns=categorical_features)
@@ -37,6 +45,7 @@ def load_and_preprocess_data(file_path):
     data = df.values
 
     return data, scaler, encoder, continuous_features, categorical_features, encoded_cat_columns
+
 
 def build_generator(input_dim, condition_dim, output_dim):
     model = tf.keras.Sequential([
@@ -51,6 +60,7 @@ def build_generator(input_dim, condition_dim, output_dim):
     ])
     return model
 
+
 def build_discriminator(input_dim, condition_dim):
     model = tf.keras.Sequential([
         layers.InputLayer(input_shape=(input_dim + condition_dim,)),
@@ -64,6 +74,7 @@ def build_discriminator(input_dim, condition_dim):
     ])
     return model
 
+
 def compile_gan(generator, discriminator):
     discriminator.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
     discriminator.trainable = False
@@ -75,6 +86,7 @@ def compile_gan(generator, discriminator):
     gan = Model(gan_input, gan_output)
     gan.compile(optimizer='adam', loss='binary_crossentropy')
     return gan
+
 
 def train_gan(gan, generator, discriminator, data, input_dim, condition_dim, epochs=10000, batch_size=128):
     half_batch = batch_size // 2
@@ -106,29 +118,27 @@ def train_gan(gan, generator, discriminator, data, input_dim, condition_dim, epo
         if epoch % 1000 == 0:
             print(f"Epoch {epoch} / {epochs} [D loss: {d_loss[0]} | D accuracy: {100 * d_loss[1]}] [G loss: {g_loss}]")
 
-def generate_synthetic_data(generator, scaler, encoder, continuous_features, categorical_features, encoded_cat_columns, num_samples=1000):
+
+def generate_synthetic_data(generator, scaler, encoder, continuous_features, categorical_features, encoded_cat_columns,
+                            num_samples=1000):
     noise = np.random.normal(0, 1, (num_samples, generator.input_shape[1] - len(encoded_cat_columns)))
 
-    conditions = np.tile(encoder.transform([[str(i) for i in range(len(categorical_features))]] * num_samples), (num_samples // len(categorical_features) + 1, 1))[:num_samples]
+    conditions = np.tile(encoder.transform([[str(i) for i in range(len(categorical_features))]] * num_samples),
+                         (num_samples // len(categorical_features) + 1, 1))[:num_samples]
 
     gen_input = np.concatenate([noise, conditions], axis=1)
     synthetic_data = generator.predict(gen_input)
 
     synthetic_continuous = synthetic_data[:, :len(continuous_features)]
-    synthetic_continuous = scaler.inverse_transform(synthetic_continuous)
+    if continuous_features:
+        synthetic_continuous = scaler.inverse_transform(synthetic_continuous)
 
     synthetic_df = pd.DataFrame(synthetic_data, columns=continuous_features + list(encoded_cat_columns))
-    synthetic_df[continuous_features] = synthetic_continuous
+    if continuous_features:
+        synthetic_df[continuous_features] = synthetic_continuous
 
     for feature in continuous_features:
         synthetic_df[feature] = synthetic_df[feature].round()
-
-    if 'age' in synthetic_df.columns:
-        synthetic_df['age'] = synthetic_df['age'].astype(int)
-
-    if 'fare' in synthetic_df.columns:
-        synthetic_df['fare'] = synthetic_df['fare'].round(4)
-        synthetic_df['fare'] = synthetic_df['fare'].clip(lower=0)
 
     for feature in categorical_features:
         encoded_columns = [col for col in synthetic_df.columns if feature in col]
@@ -137,8 +147,10 @@ def generate_synthetic_data(generator, scaler, encoder, continuous_features, cat
 
     return synthetic_df
 
+
 def main(file_path, input_dim=100, epochs=10000, batch_size=128, num_samples=1000):
-    data, scaler, encoder, continuous_features, categorical_features, encoded_cat_columns = load_and_preprocess_data(file_path)
+    data, scaler, encoder, continuous_features, categorical_features, encoded_cat_columns = load_and_preprocess_data(
+        file_path)
     output_dim = data.shape[1]
     condition_dim = len(encoded_cat_columns)
 
@@ -148,10 +160,12 @@ def main(file_path, input_dim=100, epochs=10000, batch_size=128, num_samples=100
 
     train_gan(gan, generator, discriminator, data, input_dim, condition_dim, epochs, batch_size)
 
-    synthetic_df = generate_synthetic_data(generator, scaler, encoder, continuous_features, categorical_features, encoded_cat_columns, num_samples)
+    synthetic_df = generate_synthetic_data(generator, scaler, encoder, continuous_features, categorical_features,
+                                           encoded_cat_columns, num_samples)
     synthetic_df.to_csv('synthetic_data.csv', index=False)
     print("Synthetic data saved to 'synthetic_data.csv'")
 
+
 if __name__ == "__main__":
-    file_path = '/Users/rachana/tanpfn/data/dataset/Titanic.csv'  # Update this with your file path
+    file_path = '/Users/rachana/tanpfn/data/dataset/dress_sales_openML.csv'  # Update this with your file path
     main(file_path)
