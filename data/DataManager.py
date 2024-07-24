@@ -6,6 +6,8 @@ from pathlib import Path
 
 import openml
 import pandas as pd
+
+from gan_module import createDataFrameOfSyntheticData
 from preprocessing.PreProcessor import PreProcessor
 from sklearn.model_selection import (
     StratifiedKFold,
@@ -113,7 +115,11 @@ class DataManager:
         test_data_df = data_df.iloc[test_indices[0]]
         # get the dataset without the test data
         if data_df.shape[0] < 1000:
-            manual_dataset = self.load_manual_dataset()
+            # This is done so that the sum of the entire data generated is 1000
+            num_samples = 1000 - data_df.shape[0] - test_data_df.shape[0]
+            print("Number of augmented samples generated is ", num_samples)
+            #toDO: Change the below name manual_dataset to GAN or synthetic dataset
+            manual_dataset = createDataFrameOfSyntheticData(data_df, input_dim=100, epochs=3000, batch_size=128, num_samples=num_samples)
             # preprocess manual dataset
             manual_dataset, _, _ = self.preprocessor.preprocess(
                 train_data=manual_dataset,
