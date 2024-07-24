@@ -9,7 +9,8 @@ from sklearn.preprocessing import (
     QuantileTransformer,
     StandardScaler,
 )
-
+from sklearn.neighbors import NearestNeighbors
+from sklearn.impute import SimpleImputer
 
 class PreProcessor:
     def __init__(
@@ -397,3 +398,89 @@ class PreProcessor:
         else:
             raise ValueError("Invalid data transformer type")
         return train_data, val_data, test_data
+
+    def calculate_cosine_similarity(self, X_train, X_test):
+        # Normalize X_train and X_test
+        X_train_normalized = X_train / np.linalg.norm(X_train, axis=1, keepdims=True)
+        X_test_normalized = X_test / np.linalg.norm(X_test, axis=1, keepdims=True)
+
+        # Compute cosine similarity between X_train and X_test
+        cosine_sim = cosine_similarity(X_test_normalized, X_train_normalized)
+
+        return cosine_sim
+
+    # Function to augment X_train using KNN
+    def augment_X_train_knn(self, X_train, X_test, top_k=5, metric='minkowski', aggregation='median'):
+        # Initialize the NearestNeighbors model
+        knn = NearestNeighbors(n_neighbors=top_k, metric=metric)
+        # Fit the model on the training data
+        knn.fit(X_train)
+        # Find the top k neighbors for each instance in the test set
+        distances, indices = knn.kneighbors(X_test)
+        # Initialize an empty array to store the augmented rows
+        augmented_rows = []
+        
+        for i in range(indices.shape[0]):
+            top_indices = indices[i]
+            top_distances = distances[i]
+            if aggregation == 'weighted_average':
+                weights = 1 / (top_distances + 1e-6)  # Adding a small constant to avoid division by zero
+                mean_row = np.average(X_train.iloc[top_indices, :].values, axis=0, weights=weights)
+            elif aggregation == 'median':
+                mean_row = np.median(X_train.iloc[top_indices, :].values, axis=0)
+            elif aggregation == 'mean':
+                mean_row = np.mean(X_train.iloc[top_indices, :].values, axis=0)
+            elif aggregation == 'max':
+                mean_row = np.max(X_train.iloc[top_indices, :].values, axis=0)
+            elif aggregation == 'min':
+                mean_row = np.min(X_train.iloc[top_indices, :].values, axis=0)
+            elif aggregation == 'random':
+                mean_row = X_train.iloc[np.random.choice(top_indices), :].values
+            elif aggregation == 'first':
+                mean_row = X_train.iloc[top_indices[0], :].values
+
+            else:
+                raise ValueError("Unsupported aggregation method: choose from 'weighted_average' or 'median'")
+            augmented_rows.append(mean_row)
+        
+        # Append augmented_rows to X_train
+        X_train_augmented = np.vstack([X_train.values, augmented_rows])
+        # Convert back to DataFrame with original columns
+        X_train_augmented = pd.DataFrame(X_train_augmented, columns=X_train.columns)
+        return X_train_augmented
+
+    def augment_dataset(self, train_data, test_data, target_instance):
+        # Convert to DataFrame if needed
+        train_df = pd.DataFrame(train_data, columns=train_data.columns)
+        test_df = pd.DataFrame(test_data, columns=test_data.columns)
+        test_df = test_df[train_df.columns]
+        # Impute missing values
+        # Separate numeric and non-numeric columns
+        numeric_cols = train_data.select_dtypes(include=['number']).columns
+        non_numeric_cols = train_df.select_dtypes(exclude=['number']).columns
+        
+        # Impute missing values for numeric columns
+        numeric_imputer = SimpleImputer(strategy='mean')
+        imputed_train_numeric = numeric_imputer.fit_transform(train_df[numeric_cols])
+        imputed_test_numeric = numeric_imputer.transform(test_df[numeric_cols])
+        
+        # Combine the imputed numeric and non-numeric data
+        imputed_train_df = pd.DataFrame(imputed_train_numeric, columns=numeric_cols)
+        imputed_test_df = pd.DataFrame(imputed_test_numeric, columns=numeric_cols)
+
+        # Ensure no NaN values after imputation
+        assert not imputed_train_df.isnull().values.any(), "Train DataFrame contains NaN values after imputation"
+        assert not imputed_test_df.isnull().values.any(), "Test DataFrame contains NaN values after imputation"
+
+        # Augment train data
+        augmented_df = self.augment_X_train_knn(imputed_train_df, imputed_test_df)
+
+        # Check if augmented DataFrame contains NaN values
+        if augmented_df.isnull().values.any():
+            raise error("DataFrame contains NaN values after augmentation")
+
+        if str(target_instance) in augmented_df.columns:
+        # for every row in train data [data] change the survived column to 1 if the value is greater than 0.5
+            augmented_df[target_instance] = augmented_df[target_instance].apply(lambda x: 1 if x > 0.5 else 0)
+        train_data = augmented_df
+        return train_data

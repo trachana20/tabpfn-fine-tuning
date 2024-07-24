@@ -222,6 +222,7 @@ class Trainer:
                     tabpfn_classifier=tabpfn_classifier,
                     tabpfn_model=tabpfn_model,
                     val_dataset=val_dataset,
+                    train_dataset=train_loader.dataset,
                 )
                 # visualize validation metrics
 

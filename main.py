@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import os
-
+import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
@@ -13,11 +14,12 @@ from gym.Evaluator import Evaluator
 from gym.Trainer import Trainer
 from gym.Visualizer import Visualizer
 from models.FineTuneTabPFNClassifier import FineTuneTabPFNClassifier
+from preprocessing.PreProcessor import PreProcessor
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import DecisionTreeClassifier
 from tabpfn import TabPFNClassifier
 from torch.nn import CrossEntropyLoss
-from torch.optim import Adam
+from torch.optim import Adam, AdamW
 from torch.utils.data import DataLoader
 from utils import set_seed_globally
 
@@ -40,6 +42,7 @@ setup_config = {
         "DecisionTreeClassifier": DecisionTreeClassifier,
         "TabPFNClassifier": TabPFNClassifier,
     },
+    "dataset_dir": "data/dataset/",
     "dataset_augmentations": {"FullRealDataDataset": FullRealDataDataset},
     "device": "cuda" if torch.cuda.is_available() else "cpu",
 }
@@ -60,7 +63,7 @@ modelkwargs_dict = {
             "fine_tune_type": "full_weight_fine_tuning",
         },
         "training": {
-            "epochs": 1000,
+            "epochs": 1,
             "batch_size": 2,
             "learning_rate": 1e-6,
             "criterion": CrossEntropyLoss,
@@ -83,12 +86,12 @@ visualizer = Visualizer(path=f"{setup_config['results_path']}")
 
 evaluator = Evaluator(visualizer=Visualizer)
 trainer = Trainer(visualizer=visualizer)
-
+preprocessor = PreProcessor()
 results_df = None
 
 
-if os.path.exists(f"{setup_config['results_path']}results_df.pkl"):
-    results_df = pd.read_pickle(f"{setup_config['results_path']}results_df.pkl")
+if os.path.exists(f"{setup_config['results_path']}results_df_rag_100ep1_baseline.pkl"):
+    results_df = pd.read_pickle(f"{setup_config['results_path']}results_df_rag_100ep1_baseline.pkl")
 else:
     # Step 2: run the evaluation and training loop
     # ---------- ---------- ---------- ---------- ---------- ---------- RANDOM STATES LOOP
@@ -99,8 +102,8 @@ else:
         for dataset_id, dataset_name in setup_config["dataset_mapping"].items():
             # Step 3: Load  data
             data_manager = DataManager(
-                dir_path="data/dataset",
-                dataset_id=dataset_id,
+                dir_path= setup_config["dataset_dir"] + dataset_name + ".csv",
+                dataset_id=dataset_id if dataset_id != 0 else None,
             )
             data_k_folded = data_manager.k_fold_train_test_split(
                 k_folds=setup_config["k_folds"],
@@ -127,12 +130,6 @@ else:
                     model_training_kwargs = modelkwargs_dict.get(model_name, {}).get(
                         "training",
                         {},
-                    )
-
-                    train_dataset = RealDataDataset(
-                        data=train_data["data"],
-                        target=train_data["target"],
-                        name=train_data["name"],
                     )
 
                     # validation and test data is never augmented
@@ -164,9 +161,13 @@ else:
                                 "model": model_fn,
                                 "augmentation": augmentation,
                             }
-
-                            # depending on the setting we augment the training data via
-                            # different methods. Therefore we overwrite the train_dataset
+                            
+                            # perform data augmentation
+                            train_data["data"] = preprocessor.augment_dataset(
+                                train_data["data"], 
+                                test_data["data"], 
+                                train_data["target"]
+                            )
                             train_dataset = augmentation_fn(
                                 data=train_data["data"],
                                 target=train_data["target"],
@@ -253,12 +254,11 @@ else:
                         results_df = pd.DataFrame([performance_metrics])
                     else:
                         results_df.loc[len(results_df)] = performance_metrics
-
     visualizer.save_training_logs_as_csv()
 
     os.makedirs(f"{setup_config['results_path']}", exist_ok=True)
-    results_df.to_pickle(f"{setup_config['results_path']}results_df.pkl")
-    visualizer.save_results()
+    results_df.to_pickle(f"{setup_config['results_path']}results_df_rag_100ep1_baseline.pkl")
+    visualizer.save_training_logs_as_csv()
 
 
 # ----------------- Visualize results -----------------
