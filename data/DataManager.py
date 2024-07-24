@@ -33,12 +33,17 @@ class DataManager:
 
     """
 
-    def __init__(self, dir_path, dataset_id):
+    def __init__(self, dir_path, dataset_id=None):
         self.dir_path = dir_path
         self.dataset_id = dataset_id
 
         self.results_path = f"{dir_path}/fine_tune_results"
         self.preprocessor = PreProcessor()
+
+    def load_manual_dataset(self) -> pd.DataFrame:
+        """Load a dataset from a local file."""
+        data_df = pd.read_csv(self.dir_path)
+        return data_df
 
     def split_train_test_validation(
         self,
@@ -82,6 +87,9 @@ class DataManager:
     # ----- ----- ----- ----- ----- create k-fold splits (strategy: StratifiedKFold)
     def k_fold_train_test_split(self, k_folds, val_size, random_state):
         # Preprocess the data (Missing values, encoding, outliers, scaling,...)
+        task_splits = None
+        manual_dataset = None
+        datasets = []
         task = openml.tasks.get_task(
             task_id=self.dataset_id,
             download_qualities=True,
@@ -97,12 +105,33 @@ class DataManager:
         data_df, _, categorical_indicator, attribute_names = dataset.get_data(
             dataset_format="dataframe",
         )
-
-        # List to store datasets
-        datasets = []
+        #perform augmentation on the dataset i.e. do cosine similarity with the manual dataset and add the most similar rows to the dataset
+        # Use the augmented dataset as the previous dataset and continue with the process
 
         task_splits = task.download_split()
-
+        test_indices = [task_splits.get(repeat=0, fold=i, sample=0).test for i in range(task_splits.folds)]
+        test_data_df = data_df.iloc[test_indices[0]]
+        # get the dataset without the test data
+        if data_df.shape[0] < 1000:
+            manual_dataset = self.load_manual_dataset()
+            # preprocess manual dataset
+            manual_dataset, _, _ = self.preprocessor.preprocess(
+                train_data=manual_dataset,
+                val_data=manual_dataset,
+                test_data=manual_dataset,
+                target=target,
+                categorical_indicator=categorical_indicator,
+                attribute_names=attribute_names,
+                name = name
+            )
+            # check the size of data_df and manual_dataset. data_df + Manual Dataset should be less than 1000
+            if data_df.shape[0] + manual_dataset.shape[0] > 1000:
+                # sample the manual dataset to make the total size 1000
+                rows_to_reduce = int((1-val_size)*(data_df.shape[0]) - test_data_df.shape[0])
+                if manual_dataset.shape[0] < rows_to_reduce:
+                    manual_dataset = manual_dataset.sample(n = 1000 - rows_to_reduce)
+                else:
+                    manual_dataset = manual_dataset.sample(n = rows_to_reduce)
         if task_splits is not None:
             for repeat in range(task_splits.repeats):
                 for fold in range(task_splits.folds):
@@ -129,7 +158,10 @@ class DataManager:
                             categorical_indicator=categorical_indicator,
                             attribute_names=attribute_names,
                         )
-
+                        # perform augmentation on the dataset i.e. do cosine similarity with the manual dataset and add the most similar rows to the dataset
+                        # Use the augmented dataset as the previous dataset and continue with the process
+                        if manual_dataset is not None:
+                            train_data = self.preprocessor.augment_dataset(train_data, manual_dataset, target)
                         datasets.append(
                             {
                                 "train": {
@@ -159,12 +191,12 @@ class DataManager:
 
             x_data = data_df.drop(columns=[target])
             y_data = data_df[target]
-
             # Iterate through StratifiedKFold splits
+            
             for train_index, test_index in kf.split(x_data, y_data):
                 # Create CustomDataset instances and append to datasets list
-                train_data, val_data, test_data = self.split_train_test_validation(
-                    data_df=data_df,
+                train_data, val_data, _ = self.split_train_test_validation(
+                    data_df=train_data_df,
                     test_index=test_index,
                     train_index=train_index,
                     val_size=val_size,
@@ -172,6 +204,7 @@ class DataManager:
                     name=name,
                     random_state=random_state,
                 )
+                test_data = test_data_df
                 train_data, val_data, test_data = self.preprocessor.preprocess(
                     train_data=train_data,
                     val_data=val_data,
@@ -179,6 +212,7 @@ class DataManager:
                     target=target,
                     categorical_indicator=categorical_indicator,
                     attribute_names=attribute_names,
+                    name = name
                 )
 
                 datasets.append(

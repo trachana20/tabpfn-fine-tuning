@@ -23,7 +23,8 @@ class FullRealDataDataset(Dataset):
             [torch.from_numpy(array[0]).unsqueeze(0) for array in batch], dim=0
         ).unsqueeze(0)
         ys = torch.Tensor([array[1] for array in batch]).unsqueeze(0)
-
+        if torch.isnan(xs).any() or torch.isinf(xs).any():
+            print("xs tensor contains NaN or Inf values!")
         return xs, ys
 
     def __len__(self):

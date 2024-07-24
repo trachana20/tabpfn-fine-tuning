@@ -39,21 +39,18 @@ class Evaluator:
         start_time = time.time()
         model.fit(X=x_train, y=y_train)
         fitting_time = time.time() - start_time
-
+        
         x_val = val_dataset.features
         y_val = val_dataset.labels
-
         start_time = time.time()
         y_preds = model.predict_proba(X=x_val)
         prediction_time = time.time() - start_time
-
         performance_metrics = classification_performance_metrics(
             y_preds=y_preds,
             y_true=y_val,
         )
         performance_metrics["time_fit"] = fitting_time
         performance_metrics["time_predict"] = prediction_time
-
         return model, performance_metrics
 
     def compute_metrics(self, y_true, y_preds_probs, dataset_name):
