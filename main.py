@@ -100,9 +100,7 @@ def augment_dataset(train_data, test_data, target_instance):
 
     # Check if augmented DataFrame contains NaN values
     if augmented_df.isnull().values.any():
-        print("DataFrame contains NaN values after augmentation")
-    else:
-        print("DataFrame does not contain NaN values after augmentation")
+        raise error("DataFrame contains NaN values after augmentation")
 
     if str(target_instance) in augmented_df.columns:
     # for every row in train data [data] change the survived column to 1 if the value is greater than 0.5
@@ -112,7 +110,7 @@ def augment_dataset(train_data, test_data, target_instance):
     return train_data
 
 
-# 9982:"Dress-Sales"
+# 9982:"Dress-Sales" 168746: "Titanic"
 setup_config = {
     "project_name": "Finetune-TabPFN",
     "results_path": "results/",
@@ -121,8 +119,7 @@ setup_config = {
     # val_size is percentage w.r.t. the total dataset-rows ]0,1[
     "val_size": 0.2,
     "num_workers": 0,
-    "dataset_mapping": {168746: "Titanic"},
-    # "dataset_mapping":{0: "Titanic"},
+    "dataset_mapping": {9982: "Dress-Sales", 168746: "Titanic"},
     "log_wandb": False,
     "models": {
         "FineTuneTabPFNClassifier_full_weight": FineTuneTabPFNClassifier,
@@ -130,7 +127,7 @@ setup_config = {
         "DecisionTreeClassifier": DecisionTreeClassifier,
         "TabPFNClassifier": TabPFNClassifier,
     },
-    "categorical_columns": ['survived', 'sex', 'embarked'],
+    "dataset_dir": "data/dataset/",
     "dataset_augmentations": {"FullRealDataDataset": FullRealDataDataset},
     "device": "cuda" if torch.cuda.is_available() else "cpu",
 }
@@ -151,7 +148,7 @@ modelkwargs_dict = {
             "fine_tune_type": "full_weight_fine_tuning",
         },
         "training": {
-            "epochs": 100,
+            "epochs": 1,
             "batch_size": 2,
             "learning_rate": 1e-6,
             "criterion": CrossEntropyLoss,
@@ -190,7 +187,7 @@ else:
         for dataset_id, dataset_name in setup_config["dataset_mapping"].items():
             # Step 3: Load  data
             data_manager = DataManager(
-                dir_path="/Users/anshulg954/Desktop/sose24/dllab/tabpfn-fine-tuning/data/dataset/synthetic_data_titanic.csv",
+                dir_path= setup_config["dataset_dir"] + dataset_name + ".csv",
                 dataset_id=dataset_id if dataset_id != 0 else None,
             )
             data_k_folded = data_manager.k_fold_train_test_split(
@@ -259,7 +256,7 @@ else:
                             #     data=train_data["data"],
                             #     target=train_data["target"],
                             #     name=train_data["name"],
-                            # train_data = augment_dataset(train_data, test_data, train_data["target"])
+                            train_data = augment_dataset(train_data, test_data, train_data["target"])
                             train_dataset = augmentation_fn(
                                 data=train_data["data"],
                                 target=train_data["target"],

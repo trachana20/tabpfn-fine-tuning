@@ -88,6 +88,7 @@ class DataManager:
     def k_fold_train_test_split(self, k_folds, val_size, random_state):
         # Preprocess the data (Missing values, encoding, outliers, scaling,...)
         task_splits = None
+        manual_dataset = None
         datasets = []
         task = openml.tasks.get_task(
             task_id=self.dataset_id,
@@ -111,26 +112,26 @@ class DataManager:
         test_indices = [task_splits.get(repeat=0, fold=i, sample=0).test for i in range(task_splits.folds)]
         test_data_df = data_df.iloc[test_indices[0]]
         # get the dataset without the test data
-        manual_dataset = self.load_manual_dataset()
-        # preprocess manual dataset
-        manual_dataset, _, _ = self.preprocessor.preprocess(
-            train_data=manual_dataset,
-            val_data=manual_dataset,
-            test_data=manual_dataset,
-            target=target,
-            categorical_indicator=categorical_indicator,
-            attribute_names=attribute_names,
-            name = name
-        )
-
-        # on train_data_df perform cosine similarity with manual_dataset
-        # add the most similar rows to the train_data_df
-        # perform basic prerocessing on the train_data_df and manual_dataset : 
-        # if manual_dataset is not None:
-        #     #perform augmentation using method in augmentations.py
-        #     train_data_df = self.preprocessor.augment_dataset(train_data_df, manual_dataset, target)
-        #     task_splits = None
-            
+        if data_df.shape[0] < 1000:
+            manual_dataset = self.load_manual_dataset()
+            # preprocess manual dataset
+            manual_dataset, _, _ = self.preprocessor.preprocess(
+                train_data=manual_dataset,
+                val_data=manual_dataset,
+                test_data=manual_dataset,
+                target=target,
+                categorical_indicator=categorical_indicator,
+                attribute_names=attribute_names,
+                name = name
+            )
+            # check the size of data_df and manual_dataset. data_df + Manual Dataset should be less than 1000
+            if data_df.shape[0] + manual_dataset.shape[0] > 1000:
+                # sample the manual dataset to make the total size 1000
+                rows_to_reduce = int((1-val_size)*(data_df.shape[0]) - test_data_df.shape[0])
+                if manual_dataset.shape[0] < rows_to_reduce:
+                    manual_dataset = manual_dataset.sample(n = 1000 - rows_to_reduce)
+                else:
+                    manual_dataset = manual_dataset.sample(n = rows_to_reduce)
         if task_splits is not None:
             for repeat in range(task_splits.repeats):
                 for fold in range(task_splits.folds):
@@ -159,10 +160,8 @@ class DataManager:
                         )
                         # perform augmentation on the dataset i.e. do cosine similarity with the manual dataset and add the most similar rows to the dataset
                         # Use the augmented dataset as the previous dataset and continue with the process
-                        train_data = self.preprocessor.augment_dataset(train_data, manual_dataset, target)
-                        print(train_data.shape)
-                        print(val_data.shape)
-                        print(test_data.shape)
+                        if manual_dataset is not None:
+                            train_data = self.preprocessor.augment_dataset(train_data, manual_dataset, target)
                         datasets.append(
                             {
                                 "train": {

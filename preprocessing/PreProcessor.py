@@ -446,7 +446,6 @@ class PreProcessor:
     def augment_dataset(self, train_data, test_data, target_instance):
         # Convert to DataFrame if needed
         train_df = pd.DataFrame(train_data, columns=train_data.columns)
-        print(train_df.head())
         test_df = pd.DataFrame(test_data, columns=test_data.columns)
         test_df = test_df[train_df.columns]
         # Impute missing values
@@ -472,9 +471,7 @@ class PreProcessor:
 
         # Check if augmented DataFrame contains NaN values
         if augmented_df.isnull().values.any():
-            print("DataFrame contains NaN values after augmentation")
-        else:
-            print("DataFrame does not contain NaN values after augmentation")
+            raise error("DataFrame contains NaN values after augmentation")
 
         if str(target_instance) in augmented_df.columns:
         # for every row in train data [data] change the survived column to 1 if the value is greater than 0.5
