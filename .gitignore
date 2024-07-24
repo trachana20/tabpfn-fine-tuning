@@ -240,3 +240,11 @@ results/
 *.png
 
 model_weights/FullWeightFineTuneTabPFN_training_metrics.pkl
+
+
+# remove pychache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyw
