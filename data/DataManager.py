@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from gan_module import GAN
 
 import openml
 import pandas as pd
+
 from preprocessing.PreProcessor import PreProcessor
 from sklearn.model_selection import (
     StratifiedKFold,
@@ -88,7 +90,7 @@ class DataManager:
     def k_fold_train_test_split(self, k_folds, val_size, random_state):
         # Preprocess the data (Missing values, encoding, outliers, scaling,...)
         task_splits = None
-        manual_dataset = None
+        synthetic_dataset = None
         datasets = []
         task = openml.tasks.get_task(
             task_id=self.dataset_id,
@@ -101,7 +103,6 @@ class DataManager:
         dataset = task.get_dataset()
         target = task.target_name
         name = dataset.name
-
         data_df, _, categorical_indicator, attribute_names = dataset.get_data(
             dataset_format="dataframe",
         )
@@ -113,24 +114,22 @@ class DataManager:
         test_data_df = data_df.iloc[test_indices[0]]
         # get the dataset without the test data
         if data_df.shape[0] < 1000:
-            manual_dataset = self.load_manual_dataset()
+            # This is done so that the sum of the entire data generated is 1000
+            num_samples = 1000 - data_df.shape[0] - test_data_df.shape[0]
+            synthetic_dataset = GAN.create_synthetic_data(data_df, categorical_indicator, input_dim=100, epochs=3000, batch_size=128, num_samples=num_samples)
             # preprocess manual dataset
-            manual_dataset, _, _ = self.preprocessor.preprocess(
-                train_data=manual_dataset,
-                val_data=manual_dataset,
-                test_data=manual_dataset,
+            synthetic_dataset, _, _ = self.preprocessor.preprocess(
+                train_data=synthetic_dataset,
+                val_data=synthetic_dataset,
+                test_data=synthetic_dataset,
                 target=target,
                 categorical_indicator=categorical_indicator,
                 attribute_names=attribute_names,
             )
-            # check the size of data_df and manual_dataset. data_df + Manual Dataset should be less than 1000
-            if data_df.shape[0] + manual_dataset.shape[0] > 1000:
+            # check the size of data_df and synthetic_dataset. data_df + Manual Dataset should be less than 1000
+            if data_df.shape[0] + synthetic_dataset.shape[0] > 1000:
                 # sample the manual dataset to make the total size 1000
-                rows_to_reduce = int((1-val_size)*(data_df.shape[0]) - test_data_df.shape[0])
-                if manual_dataset.shape[0] < rows_to_reduce:
-                    manual_dataset = manual_dataset.sample(n = 1000 - rows_to_reduce)
-                else:
-                    manual_dataset = manual_dataset.sample(n = rows_to_reduce)
+                synthetic_dataset = synthetic_dataset.sample(n = num_samples)
         if task_splits is not None:
             for repeat in range(task_splits.repeats):
                 for fold in range(task_splits.folds):
@@ -159,8 +158,8 @@ class DataManager:
                         )
                         # perform augmentation on the dataset i.e. do cosine similarity with the manual dataset and add the most similar rows to the dataset
                         # Use the augmented dataset as the previous dataset and continue with the process
-                        if manual_dataset is not None:
-                            train_data = self.preprocessor.augment_dataset(train_data, manual_dataset, target)
+                        if synthetic_dataset is not None:
+                            train_data = self.preprocessor.augment_dataset(train_data, synthetic_dataset, target)
                         datasets.append(
                             {
                                 "train": {
@@ -211,8 +210,8 @@ class DataManager:
                     categorical_indicator=categorical_indicator,
                     attribute_names=attribute_names,
                 )
-                if manual_dataset is not None:
-                    train_data = self.preprocessor.augment_dataset(train_data, manual_dataset, target)
+                if synthetic_dataset is not None:
+                    train_data = self.preprocessor.augment_dataset(train_data, synthetic_dataset, target)
                 datasets.append(
                     {
                         "train": {"data": train_data, "target": target, "name": name},
