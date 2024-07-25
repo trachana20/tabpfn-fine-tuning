@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from gan_module import GANModule
 
 import openml
 import pandas as pd
 
-from gan_module import createDataFrameOfSyntheticData
 from preprocessing.PreProcessor import PreProcessor
 from sklearn.model_selection import (
     StratifiedKFold,
@@ -116,7 +116,8 @@ class DataManager:
         if data_df.shape[0] < 1000:
             # This is done so that the sum of the entire data generated is 1000
             num_samples = 1000 - data_df.shape[0] - test_data_df.shape[0]
-            synthetic_dataset = createDataFrameOfSyntheticData(data_df, categorical_indicator, input_dim=100, epochs=3000, batch_size=128, num_samples=num_samples)
+            gan_module = GANModule(input_dim=100, epochs=1, batch_size=128, num_samples=num_samples)
+            synthetic_dataset = gan_module.create_data_frame_of_synthetic_data(data_df, categorical_indicator)
             # preprocess manual dataset
             synthetic_dataset, _, _ = self.preprocessor.preprocess(
                 train_data=synthetic_dataset,
