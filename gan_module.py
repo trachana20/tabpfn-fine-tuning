@@ -4,28 +4,21 @@ from sklearn.preprocessing import StandardScaler, OneHotEncoder
 import tensorflow as tf
 from tensorflow.keras import layers, Model
 
-
-def load_and_preprocess_data(df):
+def load_and_preprocess_data(df, categorical_indicator):
 
     # Extract column names and their categories/types
     column_info = df.columns
-    print("Column info:", column_info)
     continuous_features = []
     categorical_features = []
 
-    for col in column_info:
-        col_parts = col.split(",")
-        col_name = col_parts[0][2:-1]  # Extract the column name
-        col_values = col_parts[1][2:-2]  # Extract the column values or type
-
-        if len(col_values) == 1 and col_values[0] == 'NUMERIC':
-            continuous_features.append(col_name)
+    for col, is_categorical in zip(column_info, categorical_indicator):
+        if is_categorical:
+            categorical_features.append(col)
         else:
-            categorical_features.append(col_name)
-        df.rename(columns={col: col_name}, inplace=True)
+            continuous_features.append(col)
 
     for column in df.columns:
-        if df[column].dtype == 'object' or len(df[column].unique()) < 10:
+        if df[column].dtype == 'category' or len(df[column].unique()) < 10:
             df[column] = df[column].fillna(df[column].mode()[0])
         else:
             df[column] = df[column].fillna(df[column].median())
@@ -170,9 +163,9 @@ def main(file_path, input_dim=100, epochs=10000, batch_size=128, num_samples=100
     print("Synthetic data saved to 'synthetic_data.csv'")
 
 
-def createDataFrameOfSyntheticData(data_frame, input_dim=100, epochs=10000, batch_size=128, num_samples=1000):
+def createDataFrameOfSyntheticData(data_frame, categorical_indicator, input_dim=100, epochs=10000, batch_size=128, num_samples=1000):
     data, scaler, encoder, continuous_features, categorical_features, encoded_cat_columns = load_and_preprocess_data(
-        data_frame)
+        data_frame, categorical_indicator)
     output_dim = data.shape[1]
     condition_dim = len(encoded_cat_columns)
 
@@ -191,13 +184,3 @@ if __name__ == "__main__":
     file_path = '/Users/rachana/tanpfn/data/dataset/dress_sales_openML.csv'  # This is for manual debugging and
     # not included in the pipeline
     main(file_path)
-
-# Call to GANs module:
-# ToDo: 1. Change the below method and preprocessing method to accept dataframe instead of CSV file
-# ToDo: 2. Check the synthetic data with various values of the input_dimensions and also batch_size
-# ToDo: 3. The hyperparameters can be choosen with a HPO
-# num_samples = 1000 - data_df.shape[0] - test_data_df.shape[0]  # This is done so that the sum of the entire data
-# # generated is 1000
-# syn_df = createDataFrameOfSyntheticData(data_df, input_dim=100, epochs=3000, batch_size=128, num_samples=num_samples)
-
-#
