@@ -116,7 +116,7 @@ class DataManager:
         if data_df.shape[0] < 1000:
             # This is done so that the sum of the entire data generated is 1000
             num_samples = 1000 - data_df.shape[0] - test_data_df.shape[0]
-            synthetic_dataset = GAN.create_synthetic_data(data_df, categorical_indicator, input_dim=100, epochs=1, batch_size=128, num_samples=num_samples)
+            synthetic_dataset = GAN.create_synthetic_data(data_df, categorical_indicator, input_dim=100, epochs=3000, batch_size=128, num_samples=num_samples)
             # preprocess manual dataset
             synthetic_dataset, _, _ = self.preprocessor.preprocess(
                 train_data=synthetic_dataset,
