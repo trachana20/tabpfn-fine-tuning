@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import os
+import time
+import uuid
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import pandas as pd
 import seaborn as sns
 import torch
 from data.DataManager import DataManager
@@ -26,15 +27,18 @@ from utils import set_seed_globally
 # Step 0: Define hyperparameters which are valid for all models and model
 # specific hyperparameters
 
+# Generate unique identifier for each run
+unique_id = f"{time.strftime('%Y%m%d-%H%M%S')}_{uuid.uuid4()}"
+
 setup_config = {
     "project_name": "Finetune-TabPFN",
-    "results_path": "results/",
-    "random_states": [0, 1],
+    "results_path": f"results/{unique_id}/",
+    "random_states": [1],
     "k_folds": 5,
     # val_size is percentage w.r.t. the total dataset-rows ]0,1[
     "val_size": 0.2,
     "num_workers": 0,
-    "dataset_mapping": {168746: "Titanic", 9982: "Dress-Sales"},
+    "dataset_mapping": {3778: "plasma_retinol"},
     "log_wandb": False,
     "models": {
         "FineTuneTabPFNClassifier_full_weight": FineTuneTabPFNClassifier,
@@ -46,10 +50,9 @@ setup_config = {
     "dataset_augmentations": {"FullRealDataDataset": FullRealDataDataset},
     "device": "cuda" if torch.cuda.is_available() else "cpu",
 }
+
 # Create a lookup dictionary which contains the architectural and training
 # Hyperparameters of the models
-
-# Step 1: Define the model, criterion, optimizer, device and evaluator
 modelkwargs_dict = {
     # key: finetune models have to start with FineTuneTabPFNClassifier...
     "FineTuneTabPFNClassifier_full_weight": {
@@ -63,7 +66,7 @@ modelkwargs_dict = {
             "fine_tune_type": "full_weight_fine_tuning",
         },
         "training": {
-            "epochs": 1000,
+            "epochs": 100,
             "batch_size": 2,
             "learning_rate": 1e-6,
             "criterion": CrossEntropyLoss,
@@ -80,18 +83,19 @@ augmentationkwargs_dict = {
     "BatchedRealDataDataset": {"batch_size": 50},
 }
 
+# Create results path if not exist
+os.makedirs(setup_config['results_path'], exist_ok=True)
 
-visualizer = Visualizer(path=f"{setup_config['results_path']}")
-
-
+visualizer = Visualizer(path=setup_config['results_path'])
 evaluator = Evaluator(visualizer=Visualizer)
 trainer = Trainer(visualizer=visualizer)
 preprocessor = PreProcessor()
 results_df = None
 
+results_pickle_path = os.path.join(setup_config['results_path'], "results_df_rag_100ep1_baseline.pkl")
 
-if os.path.exists(f"{setup_config['results_path']}results_df_rag_100ep1_baseline.pkl"):
-    results_df = pd.read_pickle(f"{setup_config['results_path']}results_df_rag_100ep1_baseline.pkl")
+if os.path.exists(results_pickle_path):
+    results_df = pd.read_pickle(results_pickle_path)
 else:
     # Step 2: run the evaluation and training loop
     # ---------- ---------- ---------- ---------- ---------- ---------- RANDOM STATES LOOP
@@ -101,8 +105,9 @@ else:
         # ---------- ---------- ---------- ---------- ----------  DATASET ID LOOP
         for dataset_id, dataset_name in setup_config["dataset_mapping"].items():
             # Step 3: Load  data
+            print("Dataset: ", dataset_name)
             data_manager = DataManager(
-                dir_path= setup_config["dataset_dir"] + dataset_name + ".csv",
+                dir_path=setup_config["dataset_dir"] + dataset_name + ".csv",
                 dataset_id=dataset_id if dataset_id != 0 else None,
             )
             data_k_folded = data_manager.k_fold_train_test_split(
@@ -161,11 +166,11 @@ else:
                                 "model": model_fn,
                                 "augmentation": augmentation,
                             }
-                            
+
                             # perform data augmentation
                             train_data["data"] = preprocessor.augment_dataset(
-                                train_data["data"], 
-                                test_data["data"], 
+                                train_data["data"],
+                                test_data["data"],
                                 train_data["target"]
                             )
                             train_dataset = augmentation_fn(
@@ -257,21 +262,18 @@ else:
     visualizer.save_training_logs_as_csv()
 
     os.makedirs(f"{setup_config['results_path']}", exist_ok=True)
-    results_df.to_pickle(f"{setup_config['results_path']}results_df_rag_100ep1_baseline.pkl")
+    results_df.to_pickle(results_pickle_path)
     visualizer.save_training_logs_as_csv()
-
 
 # ----------------- Visualize results -----------------
 
-
 os.makedirs(f"{setup_config['results_path']}/plots/model_performance/", exist_ok=True)
 
-
 def bar_plot_dataset_performance_across_folds(
-    results_df,
-    metric,
-    dataset_id,
-    plot_settings,
+        results_df,
+        metric,
+        dataset_id,
+        plot_settings,
 ):
     dataset_name = setup_config["dataset_mapping"][dataset_id]
 
@@ -324,7 +326,6 @@ def bar_plot_dataset_performance_across_folds(
     )
     plt.close()
 
-
 def bar_plot_performance_across_datasets(results_df, metric, plot_settings):
     selected_df = results_df[["model", metric]]
 
@@ -375,7 +376,6 @@ def bar_plot_performance_across_datasets(results_df, metric, plot_settings):
     )
     plt.close()
 
-
 # ----------------- ----------------- ----------------- -----------------
 # ----------------- ----------------- ----------------- Visualize results
 # ----------------- ----------------- ----------------- -----------------
@@ -405,7 +405,6 @@ for metric in performance_metrics:
             dataset_id=dataset_id,
             plot_settings=plot_settings,
         )
-
 
 for metric in performance_metrics:
     bar_plot_performance_across_datasets(

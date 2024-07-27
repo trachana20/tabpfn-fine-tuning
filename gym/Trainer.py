@@ -4,7 +4,7 @@ import pickle
 import time
 import warnings
 from pathlib import Path
-
+import uuid
 import torch
 from evaluation.model_evaluation import classification_performance_metrics
 from gym.utils import (
@@ -15,6 +15,9 @@ from gym.utils import (
 from models.FineTuneTabPFNClassifier import FineTuneTabPFNClassifier
 from torch import nn
 from tqdm import tqdm
+from torch.utils.tensorboard import SummaryWriter  # Import TensorBoard
+from datetime import datetime
+
 
 # Filter out UserWarnings from torch.utils.checkpoint
 warnings.filterwarnings(
@@ -51,13 +54,17 @@ class Trainer:
         # either an existing model is loaded or a tabpfn is finetuned
         weights_path = kwargs.get("architectural", {}).get("weights_path", None)
 
+        # Generate a unique identifier for each training run
+        unique_id = f"{datetime.now().strftime('%Y%m%d-%H%M%S')}_{uuid.uuid4()}"
+        weights_path = f"{weights_path}_{unique_id}.pt" if weights_path else None
+
         tabpfn_classifier = kwargs.get("architectural", {}).get(
             "tabpfn_classifier",
             None,
         )
 
         # 1. check if weights_path exists and if so load the fine_tune model
-        if Path(weights_path).exists():
+        if weights_path and Path(weights_path).exists():
             return FineTuneTabPFNClassifier(
                 tabpfn_classifier=tabpfn_classifier,
                 weights_path=weights_path,
@@ -68,7 +75,7 @@ class Trainer:
         if fine_tune_type == "full_weight_fine_tuning":
             # register new writer in visualizer, which tracks the training process
 
-            writer_name = f"{fine_tune_type}_{fine_tuning_configuration['augmentation']}_{fine_tuning_configuration['dataset_name']}_{fine_tuning_configuration['fold']}_{fine_tuning_configuration['random_state']}"
+            writer_name = f"{fine_tune_type}_{fine_tuning_configuration['dataset_name']}_{fine_tuning_configuration['fold']}_{fine_tuning_configuration['random_state']}"
             self.visualizer.register_writer(
                 writer_name=writer_name,
                 config={
@@ -112,6 +119,10 @@ class Trainer:
         training,
         device,
     ):
+        current_datetime = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        # Initialize TensorBoard writer
+        writer = SummaryWriter(log_dir=f'runs/{current_datetime}_{weights_path[:-4]}')
+
         tabpfn_model = tabpfn_classifier.model[2]
 
         criterion = training["criterion"]()
@@ -215,6 +226,8 @@ class Trainer:
                     value,
                     epoch=epoch_i,
                 )
+                # Log training metrics to TensorBoard
+                writer.add_scalar(f'training/{metric}', value, epoch_i)
 
             # Call validation function after each epoch
             with torch.no_grad():
@@ -222,7 +235,7 @@ class Trainer:
                     tabpfn_classifier=tabpfn_classifier,
                     tabpfn_model=tabpfn_model,
                     val_dataset=val_dataset,
-                    train_dataset=train_loader.dataset,
+                    train_dataset=train_loader.dataset
                 )
                 # visualize validation metrics
 
@@ -232,6 +245,9 @@ class Trainer:
                         value,
                         epoch=epoch_i,
                     )
+                    # Log validation metrics to TensorBoard
+                    writer.add_scalar(f'validation/{metric}', value, epoch_i)
+
                 # Validation early stopping. We use the log loss performance
                 # on a validation set to estimate the models fine-tuning performance
 
@@ -249,6 +265,9 @@ class Trainer:
                     "update_lowest_model_counts": update_lowest_model_counts,
                 },
             )
+
+        # Close TensorBoard writer
+        writer.close()
 
         # save weights with lowest validation performance
         self._store_model_weights_and_training_metrics(
