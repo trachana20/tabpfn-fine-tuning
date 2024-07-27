@@ -36,7 +36,7 @@ To get started with this project, follow these steps:
     ```bash
    python final_evaluation.py
 
-3. **Add Arguments:**
+3. **Add Arguments:**\
    --apply_lora: Set to True to apply LoRA (default: False)\
    --apply_performer: Set to True to apply Performer (default: False)\
    --apply_gans: Set to True to apply GANs with cosine similarity (default: False)\
