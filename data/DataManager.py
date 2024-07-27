@@ -87,7 +87,7 @@ class DataManager:
         return train_data, val_data, test_data
 
     # ----- ----- ----- ----- ----- create k-fold splits (strategy: StratifiedKFold)
-    def k_fold_train_test_split(self, k_folds, val_size, random_state):
+    def k_fold_train_test_split(self, k_folds, val_size, random_state, apply_gans=False):
         # Preprocess the data (Missing values, encoding, outliers, scaling,...)
         task_splits = None
         synthetic_dataset = None
@@ -113,7 +113,7 @@ class DataManager:
         test_indices = [task_splits.get(repeat=0, fold=i, sample=0).test for i in range(task_splits.folds)]
         test_data_df = data_df.iloc[test_indices[0]]
         # get the dataset without the test data
-        if data_df.shape[0] < 1000:
+        if apply_gans and data_df.shape[0] < 1000:
             # This is done so that the sum of the entire data generated is 1000
             num_samples = 1000 - data_df.shape[0] - test_data_df.shape[0]
             synthetic_dataset = GAN.create_synthetic_data(data_df, categorical_indicator, input_dim=100, epochs=3000, batch_size=128, num_samples=num_samples)
@@ -158,7 +158,7 @@ class DataManager:
                         )
                         # perform augmentation on the dataset i.e. do cosine similarity with the manual dataset and add the most similar rows to the dataset
                         # Use the augmented dataset as the previous dataset and continue with the process
-                        if synthetic_dataset is not None:
+                        if apply_gans and synthetic_dataset is not None:
                             train_data = self.preprocessor.augment_dataset(train_data, synthetic_dataset, target)
                         datasets.append(
                             {
@@ -210,7 +210,7 @@ class DataManager:
                     categorical_indicator=categorical_indicator,
                     attribute_names=attribute_names,
                 )
-                if synthetic_dataset is not None:
+                if apply_gans and synthetic_dataset is not None:
                     train_data = self.preprocessor.augment_dataset(train_data, synthetic_dataset, target)
                 datasets.append(
                     {
