@@ -26,6 +26,7 @@ from performer_pytorch import SelfAttention
 from preprocessing.PreProcessor import PreProcessor
 import warnings
 warnings.filterwarnings("ignore")
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 train_logs = {
     "epochs": [],
@@ -46,9 +47,6 @@ valid_logs = {
     "time": []
 }
 other_model_logs = {}
-
-
-preprocessor = PreProcessor()
 
 def train(
         model,
@@ -154,7 +152,6 @@ def model_evaluation(model,model_name,dataset_name,X_train, X_test,y_train,y_tes
    
     print("Total Fitting + Prediction time: ", total_time)
 
-    accuracy = accuracy_score(y_test,np.argmax(y_preds,axis=1))
     print("Accuracy: ", accuracy)
 
     model_evaluation_logs["model_name"].append(model_name)
@@ -207,43 +204,47 @@ def get_folds(dataset_id,f):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Evaluate script with various flags.")
+    # order should not matter for the arguments
+    parser = argparse.ArgumentParser(description="Evaluate script with various flags.", add_help=True)
     parser.add_argument("--apply_lora", type=bool, default=False, help="Set to True to apply LoRA")
     parser.add_argument("--apply_performer", type=bool, default=False, help="Set to True to apply Performer")
     parser.add_argument("--apply_gans", type=bool, default=False, help="Set to True to apply GANs with cosine similarity")
     parser.add_argument("--apply_cosine_similarity_with_test_set", type=bool, default=False, help="Set to True to apply cosine similarity with test set")
-    parser.add_argument("--train_model", type=bool, default=True, help="Set to True to train the model")
-    parser.add_argument("--train_id", type=str, default="model_performer_lora", help="Set to model id to train the model")
-    parser.add_argument("--model_path", type=str, default="finetune_model/model_performer_lora.pth", help="Set to specific model path if you want to load the model")
+    parser.add_argument("--train_model", action="store_true", help="Set to True to train the model")
+    parser.add_argument("--train_id", type=str, default="model", help="Set to model id to train the model")
+    parser.add_argument("--model_path", type=str, default="finetune_model/model.pth", help="Set to specific model path if you want to load the model")
     parser.add_argument("--dataset_ids", type=dict, default={168746: "Titanic", 9982: "Dress-Sales"}, help="Set to train the model with specific dataset ids")
-    parser.add_argument("--device", type=str, default="cuda", help="Set to device to run the model")
+    parser.add_argument("--device", type=str, default="cpu", help="Set to device to run the model")
     parser.add_argument("--k_folds", type=int, default=5, help="Set to number of k-folds")
     parser.add_argument("--num_classes", type=int, default=2, help="Set to number of classes")
     parser.add_argument("--n_estimators", type=list, default=[100, 500, 1000], help="Set to number of estimators")
     parser.add_argument("--max_depth", type=list, default=[10, 50, 100], help="Set to max depth")
     parser.add_argument("--models", type=dict, default={"OG_TABPFN": TabPFNClassifier(batch_size_inference=5), "RF": RandomForestClassifier(), "DT": DecisionTreeClassifier()}, help="Set to models to evaluate")
-    parser.add_argument("--epochs", type=list, default=[10, 100, 1000], help="Set to number of epochs")
+    parser.add_argument("--epochs", type=list, default=[100, 1000], help="Set to number of epochs")
     parser.add_argument("--learning_rate", type=list, default=[1e-6], help="Set to learning rate")
     parser.add_argument("--early_stopping", type=list, default=[0.1], help="Set to early stopping")
     parser.add_argument("--criterion", type=list, default=[CrossEntropyLoss()], help="Set to criterion")
     parser.add_argument("--optimizer", type=list, default=[Adam], help="Set to optimizer")
+    parser.add_argument("--distance_metric", type=str, default="cosine", help="Set to distance metric")
+    parser.add_argument("--n_neighbors", type=int, default=5, help="Set to number of neighbors")
+    parser.add_argument("--aggregation", type=str, default="mean", help="Set to aggregation")
     args = parser.parse_args()
-
     # Set global variables
     global apply_lora, apply_performer, apply_gans, apply_cosine_similarity_with_test_set,\
         train_model, TRAIN_ID, MODEL_PATH, DATASET_IDS, DEVICE, K_FOLDS, NUM_CLASSES,\
-        OTHERS_HP_GRID, MODELS
+        OTHERS_HP_GRID, MODELS, aggregation, distance_metric, n_neighbors
     apply_lora = args.apply_lora
     apply_performer = args.apply_performer
     apply_gans = args.apply_gans
     apply_cosine_similarity_with_test_set = args.apply_cosine_similarity_with_test_set
-    train_model = args.train_model
+    train_model = args.train_model 
     TRAIN_ID = args.train_id
     MODEL_PATH = "finetune_model/" + TRAIN_ID + ".pth"
     DATASET_IDS = args.dataset_ids
     NUM_CLASSES = args.num_classes
     K_FOLDS = args.k_folds
     MODELS = args.models
+    print("Models: ", MODELS)
     DEVICE = torch.device("cpu")
     if args.device == "cuda":
         DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -258,6 +259,11 @@ if __name__ == "__main__":
         'criterion': args.criterion,
         'optimizer' : args.optimizer
     }
+    preprocessor = PreProcessor(
+        distance_metric=args.distance_metric,
+        n_neighbors=args.n_neighbors,
+        aggregation=args.aggregation,
+    )
     if train_model:
         ## Preparing data for training
         print("Starting Train Process")
@@ -277,7 +283,6 @@ if __name__ == "__main__":
                 model.model[2].transformer_encoder.layers[i] = attn
         if apply_lora:
             print("Initialising and applying LoRA")
-            
             linear_layers = []
             for name, submodule in model.model[2].named_modules():
                 if isinstance(submodule, nn.Linear):
@@ -326,7 +331,7 @@ if __name__ == "__main__":
             else:
                 ## EVALUATION of other models
                 print("Starting Evaluation...")
-                for model_id, model in MODELS:
+                for model_id, model in MODELS.items():
                     if "OG_TABPFN" in model_id:
                         model.model[2].load_state_dict(torch.load(MODEL_PATH))
                         model_evaluation(model,model_id,dataset_name,X_train, y_train,X_test,y_test)

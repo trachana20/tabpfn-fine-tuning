@@ -19,11 +19,17 @@ class PreProcessor:
         data_tranformer_type="power_transform",
         numerical_data_imputation="mean",
         categorical_data_imputation="most_frequent",
+        distance_metric="cosine",
+        n_neighbors=5,
+        aggregation="mean",
     ):
         self.encode_categorical_type = categorical_encoder_type
         self.data_tranformer_type = data_tranformer_type
         self.numerical_data_imputation = numerical_data_imputation
         self.categorical_data_imputation = categorical_data_imputation
+        self.distance_metric = distance_metric
+        self.top_k = n_neighbors
+        self.aggregation = aggregation
 
     def preprocess(
         self,
@@ -410,9 +416,11 @@ class PreProcessor:
         return cosine_sim
 
     # Function to augment X_train using KNN
-    def augment_X_train_knn(self, X_train, X_test, top_k=5, metric='minkowski', aggregation='median'):
+    def augment_X_train_knn(self, X_train, X_test):
         # Initialize the NearestNeighbors model
-        knn = NearestNeighbors(n_neighbors=top_k, metric=metric)
+        aggregation = self.aggregation
+        top_k = self.top_k
+        knn = NearestNeighbors(n_neighbors=top_k, metric=self.distance_metric)
         # Fit the model on the training data
         knn.fit(X_train)
         # Find the top k neighbors for each instance in the test set
@@ -483,4 +491,5 @@ class PreProcessor:
         # for every row in train data [data] change the survived column to 1 if the value is greater than 0.5
             augmented_df[target_instance] = augmented_df[target_instance].apply(lambda x: 1 if x > 0.5 else 0)
         train_data = augmented_df
+        print("Train data shape after augmentation: ", train_data)
         return train_data
