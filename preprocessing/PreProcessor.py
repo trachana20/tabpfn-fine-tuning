@@ -410,11 +410,18 @@ class PreProcessor:
         return cosine_sim
 
     # Function to augment X_train using KNN
-    def augment_X_train_knn(self, X_train, X_test, top_k=5, metric='minkowski', aggregation='median'):
+    def augment_X_train_knn(self, X_train, X_test, target_instance, top_k=5, metric='minkowski', aggregation='median'):
+        print("X Train", X_train)
+        print("X Test", X_test)
+        X_train_ = X_train
+        X_train_.drop(columns=target_instance)
+        X_test.drop(columns=target_instance)
+
+
         # Initialize the NearestNeighbors model
         knn = NearestNeighbors(n_neighbors=top_k, metric=metric)
         # Fit the model on the training data
-        knn.fit(X_train)
+        knn.fit(X_train_)
         # Find the top k neighbors for each instance in the test set
         distances, indices = knn.kneighbors(X_test)
         # Initialize an empty array to store the augmented rows
@@ -454,6 +461,7 @@ class PreProcessor:
         train_df = pd.DataFrame(train_data, columns=train_data.columns)
         test_df = pd.DataFrame(test_data, columns=test_data.columns)
         test_df = test_df[train_df.columns]
+
         # Impute missing values
         # Separate numeric and non-numeric columns
         numeric_cols = train_data.select_dtypes(include=['number']).columns
@@ -472,8 +480,9 @@ class PreProcessor:
         assert not imputed_train_df.isnull().values.any(), "Train DataFrame contains NaN values after imputation"
         assert not imputed_test_df.isnull().values.any(), "Test DataFrame contains NaN values after imputation"
 
+
         # Augment train data
-        augmented_df = self.augment_X_train_knn(imputed_train_df, imputed_test_df)
+        augmented_df = self.augment_X_train_knn(imputed_train_df, imputed_test_df, target_instance)
 
         # Check if augmented DataFrame contains NaN values
         if augmented_df.isnull().values.any():

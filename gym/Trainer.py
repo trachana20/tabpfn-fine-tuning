@@ -72,7 +72,7 @@ class Trainer:
 
         # 2. if weights_path does not exist, fine_tune the model
         # call the correct fine tuning function
-        if fine_tune_type == "full_weight_fine_tuning":
+        if fine_tune_type == "full_weight_fine_tuning" or fine_tune_type == "full_weight_fine_tuning_gans" or fine_tune_type == "full_weight_fine_tuning_cosine_similarity":
             # register new writer in visualizer, which tracks the training process
 
             writer_name = f"{fine_tune_type}_{fine_tuning_configuration['dataset_name']}_{fine_tuning_configuration['fold']}_{fine_tuning_configuration['random_state']}"
@@ -299,16 +299,16 @@ class Trainer:
         # (pre-processing, softmax temperature, etc.)
         tabpfn_classifier.model = (None, None, tabpfn_model)
 
-        single_eval_pos = int(2 / 3 * val_dataset.number_rows)
+        # single_eval_pos = int(2 / 3 * val_dataset.number_rows)
 
         # for the proper evaluation we also use numpy arrays instead
         # of tensors. 1. we don't run into the risk of updating weights
         # accidentally and we mimic again the later use-case
 
-        x_train = val_dataset.features[:single_eval_pos]
-        y_train = val_dataset.labels[:single_eval_pos]
-        x_query = val_dataset.features[single_eval_pos:]
-        y_true = val_dataset.labels[single_eval_pos:]
+        x_train = train_dataset.features
+        y_train = train_dataset.labels
+        x_query = val_dataset.features
+        y_true = val_dataset.labels
 
         start_time = time.time()
         tabpfn_classifier.fit(x_train, y_train)
@@ -329,5 +329,7 @@ class Trainer:
         # enrich validation metrics with additional information
         val_metrics["fitting_time"] = fitting_time
         val_metrics["prediction_time"] = prediction_time
+
+        print("Validation metrics", val_metrics)
 
         return val_metrics

@@ -109,6 +109,7 @@ class DataManager:
         datasets = []
 
         task_splits = task.download_split()
+        task_splits = None
 
         if task_splits is not None:
             for repeat in range(task_splits.repeats):
@@ -196,7 +197,7 @@ class DataManager:
                     },
                 )
 
-        return datasets
+        return datasets, categorical_indicator, target, attribute_names
 
     def k_fold_train_test_split_gan_augmentation(self, k_folds, val_size, random_state):
         # Preprocess the data (Missing values, encoding, outliers, scaling,...)
