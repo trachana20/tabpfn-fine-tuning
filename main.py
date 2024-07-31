@@ -38,7 +38,7 @@ setup_config = {
     # val_size is percentage w.r.t. the total dataset-rows ]0,1[
     "val_size": 0.2,
     "num_workers": 0,
-    "dataset_mapping": {9971:"ilpd"},
+    "dataset_mapping": {168746:"Titanic"},
     "log_wandb": False,
     "models": {
         # "FineTuneTabPFNClassifier_full_weight": FineTuneTabPFNClassifier,
@@ -69,7 +69,7 @@ modelkwargs_dict = {
             "fine_tune_type": "full_weight_fine_tuning",
         },
         "training": {
-            "epochs": 100,
+            "epochs": 1,
             "batch_size": 2,
             "learning_rate": 1e-6,
             "criterion": CrossEntropyLoss,
@@ -88,7 +88,7 @@ modelkwargs_dict = {
             "fine_tune_type": "full_weight_fine_tuning_gans",
         },
         "training": {
-            "epochs": 100,
+            "epochs": 1,
             "batch_size": 2,
             "learning_rate": 1e-6,
             "criterion": CrossEntropyLoss,
@@ -107,7 +107,7 @@ modelkwargs_dict = {
             "fine_tune_type": "full_weight_fine_tuning_cosine_similarity",
         },
         "training": {
-            "epochs": 100,
+            "epochs": 1,
             "batch_size": 2,
             "learning_rate": 1e-6,
             "criterion": CrossEntropyLoss,
@@ -204,6 +204,8 @@ else:
                                 augmentation, {}
                             )
 
+                            train_dataset = None
+
                             fine_tuning_configuration = {
                                 "random_state": random_state,
                                 "dataset_id": dataset_id,
@@ -225,10 +227,12 @@ else:
                             elif "gan" in model_name:
                                 # perform augmentation with x test and Dtrain with GAN data
                                 augment_train_data = fold["train"]
-                                augment_train_data["data"] = preprocessor.augment_dataset(
-                                    train_data["data"],
-                                    test_data["data"],
-                                    train_data["target"])
+                                # Perform cosine similarity only when adding similar samples of x test to D train is less than 1000
+                                if fold["train"].get('data').shape[0] + fold["test"].get('data').shape[0] < 1000:
+                                    augment_train_data["data"] = preprocessor.augment_dataset(
+                                        train_data["data"],
+                                        test_data["data"],
+                                        train_data["target"])
                                 if fold["train"].get('data').shape[0] < 1000:
                                     # This is done so that the sum of the entire data generated is 1000
                                     num_samples = 1000 - train_data["data"].shape[0] - test_data["data"].shape[0]
@@ -256,6 +260,8 @@ else:
                                                                                            synthetic_dataset, target)
                                     else:
                                         augment_train_data = fold["train"]
+                                else:
+                                    augment_train_data = fold["train"]
                             else:
                                 augment_train_data = fold["train"]
 
@@ -373,15 +379,15 @@ def bar_plot_dataset_performance_across_folds(
     selected_df = results_df[results_df["dataset_id"] == dataset_id][["model_name", metric]]
 
     # Create barplot
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(12, 8))
     ax = sns.barplot(
         data=selected_df,
         x="model_name",
         y=metric,
         errorbar=("ci", 95),
         capsize=0.1,
-        err_kws={"linewidth": 1},
-        palette="coolwarm",
+        err_kws={"linewidth": 1.5},
+        palette="Set2",  # Use bright colors
     )
 
     if plot_settings.get(metric, {}).get("y_scale") == "log":
@@ -389,34 +395,36 @@ def bar_plot_dataset_performance_across_folds(
 
     # Adjust bar labels position
     if plot_settings.get(metric, {}).get("bar_label") == "top":
-        ax.bar_label(ax.containers[0])
+        ax.bar_label(ax.containers[0], fontsize=14, fontweight='bold', color='black')
 
     elif plot_settings.get(metric, {}).get("bar_label") == "center":
         threshold = 0.025
         for c in ax.containers:
-            # Filter the labels
             labels = [v if v > threshold else "" for v in c.datavalues]
-            ax.bar_label(c, labels=labels, label_type="center")
+            ax.bar_label(c, labels=labels, label_type="center", fontsize=14, fontweight='bold', color='black')
 
     # Add labels and title
-    plt.xlabel("Model")
-
+    plt.xlabel("Model", fontsize=16, fontweight='bold')
     if plot_settings.get(metric, {}).get("y_label"):
-        plt.ylabel(f"{plot_settings[metric]['y_label']} [Across Folds]")
+        plt.ylabel(f"{plot_settings[metric]['y_label']} [Across Folds]", fontsize=16, fontweight='bold')
     else:
-        plt.ylabel(f"{metric.capitalize().replace('_', '')} [Across Folds]")
+        plt.ylabel(f"{metric.capitalize().replace('_', ' ')} [Across Folds]", fontsize=16, fontweight='bold')
 
     plt.title(
-        f"Dataset: {dataset_name} - Average {metric.capitalize()} by Model [95% CI]",
+        f"Dataset: {dataset_name} - Average {metric.capitalize().replace('_', ' ')} by Model [95% CI]",
+        fontsize=18, fontweight='bold'
     )
 
     # Rotate x-axis labels for better readability
-    plt.xticks(rotation=25, ha="right")
+    plt.xticks(rotation=25, ha="right", fontsize=14)
+    plt.yticks(fontsize=14)
 
     # Show plot
     plt.tight_layout()
     plt.savefig(
         f"{setup_config['results_path']}/plots/model_performance/{metric}_{dataset_name}.png",
+        dpi=300,  # High resolution for poster
+        bbox_inches='tight'  # Ensure everything fits within the figure area
     )
     plt.close()
 
@@ -488,10 +496,10 @@ def bar_plot_performance_across_datasets(results_df, metric, plot_settings):
         y=metric,
         hue="model_name",
         dodge=False,
-        palette="coolwarm",
+        palette="Set2",  # Use the 'Set2' palette for bright yet harmonious colors
         errorbar=("ci", 95),
         capsize=0.1,
-        err_kws={"linewidth": 1},
+        err_kws={"linewidth": 1.5},
         legend=False,
     )
 
@@ -500,32 +508,36 @@ def bar_plot_performance_across_datasets(results_df, metric, plot_settings):
 
     # Adjust bar labels position
     if plot_settings.get(metric, {}).get("bar_label") == "top":
-        ax.bar_label(ax.containers[0], fmt='%.2f', padding=3)
+        ax.bar_label(ax.containers[0], fmt='%.2f', padding=3, fontsize=12, fontweight='bold')
 
     elif plot_settings.get(metric, {}).get("bar_label") == "center":
         threshold = 0.025
         for c in ax.containers:
             # Filter the labels
             labels = [f'{v:.2f}' if v > threshold else "" for v in c.datavalues]
-            ax.bar_label(c, labels=labels, label_type="center", padding=3)
+            ax.bar_label(c, labels=labels, label_type="center", padding=3, fontsize=12, fontweight='bold')
 
     # Add labels and title
-    plt.xlabel("Model", fontsize=14)
+    plt.xlabel("Model", fontsize=16, fontweight='bold')
     if plot_settings.get(metric, {}).get("y_label"):
-        plt.ylabel(f"{plot_settings[metric]['y_label']} [Across Datasets]", fontsize=14)
+        plt.ylabel(f"{plot_settings[metric]['y_label']} [Across Datasets]", fontsize=16, fontweight='bold')
     else:
-        plt.ylabel(f"{metric.capitalize().replace('_', ' ')} [Across Datasets]", fontsize=14)
+        plt.ylabel(f"{metric.capitalize().replace('_', ' ')} [Across Datasets]", fontsize=16, fontweight='bold')
 
-    plt.title(f"Average {metric.capitalize()} by Model [95% CI]", fontsize=16, fontweight='bold')
-    plt.xticks(rotation=25, ha="right", fontsize=12)
-    plt.yticks(fontsize=12)
+    plt.title(f"Average {metric.capitalize()} by Model [95% CI]", fontsize=18, fontweight='bold')
+    plt.xticks(rotation=25, ha="right", fontsize=14)
+    plt.yticks(fontsize=14)
 
     # Add gridlines for better readability
     plt.grid(axis='y', linestyle='--', linewidth=0.7)
 
     # Show plot with tight layout
     plt.tight_layout()
-    plt.savefig(f"{setup_config['results_path']}/plots/model_performance/{metric}_across_datasets.png")
+    plt.savefig(
+        f"{setup_config['results_path']}/plots/model_performance/{metric}_across_datasets.png",
+        dpi=300,  # High resolution for poster
+        bbox_inches='tight'  # Ensure everything fits within the figure area
+    )
     plt.close()
 
 

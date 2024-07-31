@@ -153,14 +153,15 @@ class PreProcessor:
         categorical_features,
     ):
         for cat_feature in categorical_features[:]:
-            num_unique_values = train_data[cat_feature].nunique()
-            len_data = len(train_data)
-            # drop if more than 95% are unique values
-            if num_unique_values >= len_data * 0.95:
-                train_data = train_data.drop(columns=[cat_feature])
-                val_data = val_data.drop(columns=[cat_feature])
-                test_data = test_data.drop(columns=[cat_feature])
-                categorical_features.remove(cat_feature)
+            if cat_feature in train_data:
+                num_unique_values = train_data[cat_feature].nunique()
+                len_data = len(train_data)
+                # drop if more than 95% are unique values
+                if num_unique_values >= len_data * 0.95:
+                    train_data = train_data.drop(columns=[cat_feature])
+                    val_data = val_data.drop(columns=[cat_feature])
+                    test_data = test_data.drop(columns=[cat_feature])
+                    categorical_features.remove(cat_feature)
 
         return train_data, val_data, test_data
 
@@ -241,11 +242,12 @@ class PreProcessor:
 
         # Handle missing values for categorical features
         for cat_features in categorical_features:
-            most_frequent = train_data[cat_features].mode().iloc[0]
+            if cat_features in train_data:
+                most_frequent = train_data[cat_features].mode().iloc[0]
 
-            train_data[cat_features] = train_data[cat_features].fillna(most_frequent)
-            val_data[cat_features] = val_data[cat_features].fillna(most_frequent)
-            test_data[cat_features] = test_data[cat_features].fillna(most_frequent)
+                train_data[cat_features] = train_data[cat_features].fillna(most_frequent)
+                val_data[cat_features] = val_data[cat_features].fillna(most_frequent)
+                test_data[cat_features] = test_data[cat_features].fillna(most_frequent)
 
         return train_data, val_data, test_data
 
