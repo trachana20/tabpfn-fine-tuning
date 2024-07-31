@@ -16,7 +16,7 @@ class PreProcessor:
     def __init__(
         self,
         categorical_encoder_type="ordinal",
-        data_tranformer_type="power_transform",
+        data_tranformer_type="quantile_transform",
         numerical_data_imputation="mean",
         categorical_data_imputation="most_frequent",
     ):
@@ -153,7 +153,7 @@ class PreProcessor:
         categorical_features,
     ):
         for cat_feature in categorical_features[:]:
-            if cat_feature in train_data:
+            if cat_feature in train_data.columns:
                 num_unique_values = train_data[cat_feature].nunique()
                 len_data = len(train_data)
                 # drop if more than 95% are unique values
@@ -194,7 +194,7 @@ class PreProcessor:
         for column in train_data.columns:
             if column == target:
                 continue
-            if not pd.api.types.is_numeric_dtype(train_data[column]):
+            if pd.api.types.is_categorical_dtype(train_data[column]):
                 # Not Numeric
                 categorical_features.add(column)
                 numerical_features.discard(column)
@@ -242,12 +242,11 @@ class PreProcessor:
 
         # Handle missing values for categorical features
         for cat_features in categorical_features:
-            if cat_features in train_data:
-                most_frequent = train_data[cat_features].mode().iloc[0]
+            most_frequent = train_data[cat_features].mode().iloc[0]
 
-                train_data[cat_features] = train_data[cat_features].fillna(most_frequent)
-                val_data[cat_features] = val_data[cat_features].fillna(most_frequent)
-                test_data[cat_features] = test_data[cat_features].fillna(most_frequent)
+            train_data[cat_features] = train_data[cat_features].fillna(most_frequent)
+            val_data[cat_features] = val_data[cat_features].fillna(most_frequent)
+            test_data[cat_features] = test_data[cat_features].fillna(most_frequent)
 
         return train_data, val_data, test_data
 
@@ -460,31 +459,56 @@ class PreProcessor:
 
     def augment_dataset(self, train_data, test_data, target_instance):
         # Convert to DataFrame if needed
-        train_df = pd.DataFrame(train_data, columns=train_data.columns)
-        test_df = pd.DataFrame(test_data, columns=test_data.columns)
-        test_df = test_df[train_df.columns]
+        if not isinstance(train_data, pd.DataFrame):
+            train_df = pd.DataFrame(train_data)
+        else:
+            train_df = train_data.copy()
+        
+        if not isinstance(test_data, pd.DataFrame):
+            test_df = pd.DataFrame(test_data)
+        else:
+            test_df = test_data.copy()
+        
+        # Ensure test_df has the same columns as train_df
+        test_df = test_df.reindex(columns=train_df.columns)
 
-        # Impute missing values
-        # Separate numeric and non-numeric columns
-        numeric_cols = train_data.select_dtypes(include=['number']).columns
+        # Identify numeric and non-numeric columns
+        numeric_cols = train_df.select_dtypes(include=['number']).columns
         non_numeric_cols = train_df.select_dtypes(exclude=['number']).columns
-        
-        # Impute missing values for numeric columns
-        numeric_imputer = SimpleImputer(strategy='mean')
-        imputed_train_numeric = numeric_imputer.fit_transform(train_df[numeric_cols])
-        imputed_test_numeric = numeric_imputer.transform(test_df[numeric_cols])
-        
-        # Combine the imputed numeric and non-numeric data
-        imputed_train_df = pd.DataFrame(imputed_train_numeric, columns=numeric_cols)
-        imputed_test_df = pd.DataFrame(imputed_test_numeric, columns=numeric_cols)
 
-        # Ensure no NaN values after imputation
-        assert not imputed_train_df.isnull().values.any(), "Train DataFrame contains NaN values after imputation"
-        assert not imputed_test_df.isnull().values.any(), "Test DataFrame contains NaN values after imputation"
+        # Handle missing values for numeric columns
+        if len(numeric_cols) > 0:
+            numeric_imputer = SimpleImputer(strategy='mean')
+
+            # Handle columns with all missing values separately
+            cols_with_all_missing_values = numeric_cols[train_df[numeric_cols].isnull().all()].tolist()
+            cols_with_some_missing_values = [col for col in numeric_cols if col not in cols_with_all_missing_values]
+
+            if len(cols_with_some_missing_values) > 0:
+                # Impute columns with some non-missing values
+                train_df[cols_with_some_missing_values] = numeric_imputer.fit_transform(train_df[cols_with_some_missing_values])
+                test_df[cols_with_some_missing_values] = numeric_imputer.transform(test_df[cols_with_some_missing_values])
+
+            # Fill columns with all missing values with a default value (e.g., 0)
+            for col in cols_with_all_missing_values:
+                train_df[col] = train_df[col].fillna(0)
+                test_df[col] = test_df[col].fillna(0)
+
+        # Handle missing values for non-numeric columns
+        if len(non_numeric_cols) > 0:
+            non_numeric_imputer = SimpleImputer(strategy='most_frequent')
+
+            # Impute non-numeric columns
+            train_df[non_numeric_cols] = non_numeric_imputer.fit_transform(train_df[non_numeric_cols])
+            test_df[non_numeric_cols] = non_numeric_imputer.transform(test_df[non_numeric_cols])
+
+        # Ensure no NaNs are left (in case there are remaining NaNs)
+        train_df.fillna(value='Unknown', inplace=True)
+        test_df.fillna(value='Unknown', inplace=True)
 
 
         # Augment train data
-        augmented_df = self.augment_X_train_knn(imputed_train_df, imputed_test_df, target_instance)
+        augmented_df = self.augment_X_train_knn(train_df, test_df, target_instance)
 
         # Check if augmented DataFrame contains NaN values
         if augmented_df.isnull().values.any():

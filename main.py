@@ -34,11 +34,11 @@ setup_config = {
     "project_name": "Finetune-TabPFN",
     "results_path": f"results/{unique_id}/",
     "random_states": [42],
-    "k_folds": 2,
+    "k_folds": 5,
     # val_size is percentage w.r.t. the total dataset-rows ]0,1[
     "val_size": 0.2,
     "num_workers": 0,
-    "dataset_mapping": {168746:"Titanic"},
+    "dataset_mapping": {168746:"Titanic",9982:"Dress-Sales",15:"breast-w", 37:"diabetes", 3783:"fri_c2_500_50", 3562:"lupus", 3778:"plasma_retinol", 3748:"transplant"},
     "log_wandb": False,
     "models": {
         # "FineTuneTabPFNClassifier_full_weight": FineTuneTabPFNClassifier,
@@ -69,7 +69,7 @@ modelkwargs_dict = {
             "fine_tune_type": "full_weight_fine_tuning",
         },
         "training": {
-            "epochs": 1,
+            "epochs": 100,
             "batch_size": 2,
             "learning_rate": 1e-6,
             "criterion": CrossEntropyLoss,
@@ -88,8 +88,8 @@ modelkwargs_dict = {
             "fine_tune_type": "full_weight_fine_tuning_gans",
         },
         "training": {
-            "epochs": 1,
-            "batch_size": 2,
+            "epochs": 100,
+            "batch_size":2,
             "learning_rate": 1e-6,
             "criterion": CrossEntropyLoss,
             "optimizer": Adam,
@@ -107,7 +107,7 @@ modelkwargs_dict = {
             "fine_tune_type": "full_weight_fine_tuning_cosine_similarity",
         },
         "training": {
-            "epochs": 1,
+            "epochs": 100,
             "batch_size": 2,
             "learning_rate": 1e-6,
             "criterion": CrossEntropyLoss,
@@ -236,7 +236,6 @@ else:
                                 if fold["train"].get('data').shape[0] < 1000:
                                     # This is done so that the sum of the entire data generated is 1000
                                     num_samples = 1000 - train_data["data"].shape[0] - test_data["data"].shape[0]
-                                    print("Number of samples", num_samples)
                                     if num_samples > 0:
                                         synthetic_dataset = GAN.create_synthetic_data(train_data["data"], categorical_indicator,
                                                                                   input_dim=100, epochs=100,
@@ -258,6 +257,11 @@ else:
                                         if synthetic_dataset is not None:
                                             augment_train_data["data"] = preprocessor.augment_dataset(train_data["data"],
                                                                                            synthetic_dataset, target)
+                                            augment_train_data["data"] = preprocessor.augment_dataset(
+                                                augment_train_data["data"],
+                                                test_data["data"],
+                                                train_data["target"]
+                                            )
                                     else:
                                         augment_train_data = fold["train"]
                                 else:
