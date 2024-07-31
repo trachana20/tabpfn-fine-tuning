@@ -1,0 +1,10 @@
+numpy
+openml
+pandas
+peft
+scikit_learn
+tabpfn
+tensorboardX
+torch
+matplotlib
+seaborn
