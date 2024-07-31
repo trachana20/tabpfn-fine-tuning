@@ -89,7 +89,118 @@ class DataManager:
     # ----- ----- ----- ----- ----- create k-fold splits (strategy: StratifiedKFold)
     def k_fold_train_test_split(self, k_folds, val_size, random_state):
         # Preprocess the data (Missing values, encoding, outliers, scaling,...)
+        task = openml.tasks.get_task(
+            task_id=self.dataset_id,
+            download_qualities=True,
+            download_features_meta_data=True,
+            download_splits=True,
+            download_data=True,
+        )
+        # ignore future warning! We use version, where defaults are correct
+        dataset = task.get_dataset()
+        target = task.target_name
+        name = dataset.name
+
+        data_df, _, categorical_indicator, attribute_names = dataset.get_data(
+            dataset_format="dataframe",
+        )
+
+        # List to store datasets
+        datasets = []
+
+        task_splits = task.download_split()
         task_splits = None
+
+        if task_splits is not None:
+            for repeat in range(task_splits.repeats):
+                for fold in range(task_splits.folds):
+                    for sample in range(task_splits.samples):
+                        split = task_splits.get(repeat=repeat, fold=fold, sample=sample)
+
+                        # Create CustomDataset instances and append to datasets list
+                        train_data, val_data, test_data = (
+                            self.split_train_test_validation(
+                                data_df=data_df,
+                                test_index=split.test,
+                                train_index=split.train,
+                                val_size=val_size,
+                                target=target,
+                                name=name,
+                                random_state=random_state,
+                            )
+                        )
+                        train_data, val_data, test_data = self.preprocessor.preprocess(
+                            train_data=train_data,
+                            val_data=val_data,
+                            test_data=test_data,
+                            target=target,
+                            categorical_indicator=categorical_indicator,
+                            attribute_names=attribute_names,
+                        )
+
+                        datasets.append(
+                            {
+                                "train": {
+                                    "data": train_data,
+                                    "target": target,
+                                    "name": name,
+                                },
+                                "val": {
+                                    "data": val_data,
+                                    "target": target,
+                                    "name": name,
+                                },
+                                "test": {
+                                    "data": test_data,
+                                    "target": target,
+                                    "name": name,
+                                },
+                            },
+                        )
+        else:
+            # Initialize StratifiedKFold
+            kf = StratifiedKFold(
+                n_splits=k_folds,
+                shuffle=True,
+                random_state=random_state,
+            )
+
+            x_data = data_df.drop(columns=[target])
+            y_data = data_df[target]
+
+            # Iterate through StratifiedKFold splits
+            for train_index, test_index in kf.split(x_data, y_data):
+                # Create CustomDataset instances and append to datasets list
+                train_data, val_data, test_data = self.split_train_test_validation(
+                    data_df=data_df,
+                    test_index=test_index,
+                    train_index=train_index,
+                    val_size=val_size,
+                    target=target,
+                    name=name,
+                    random_state=random_state,
+                )
+                train_data, val_data, test_data = self.preprocessor.preprocess(
+                    train_data=train_data,
+                    val_data=val_data,
+                    test_data=test_data,
+                    target=target,
+                    categorical_indicator=categorical_indicator,
+                    attribute_names=attribute_names,
+                )
+
+                datasets.append(
+                    {
+                        "train": {"data": train_data, "target": target, "name": name},
+                        "val": {"data": val_data, "target": target, "name": name},
+                        "test": {"data": test_data, "target": target, "name": name},
+                    },
+                )
+
+        return datasets, categorical_indicator, target, attribute_names
+
+    def k_fold_train_test_split_gan_augmentation(self, k_folds, val_size, random_state):
+        # Preprocess the data (Missing values, encoding, outliers, scaling,...)
         synthetic_dataset = None
         datasets = []
         task = openml.tasks.get_task(
@@ -116,7 +227,7 @@ class DataManager:
         if data_df.shape[0] < 1000:
             # This is done so that the sum of the entire data generated is 1000
             num_samples = 1000 - data_df.shape[0] - test_data_df.shape[0]
-            synthetic_dataset = GAN.create_synthetic_data(data_df, categorical_indicator, input_dim=100, epochs=3000, batch_size=128, num_samples=num_samples)
+            synthetic_dataset = GAN.create_synthetic_data(data_df, categorical_indicator, input_dim=100, epochs=100, batch_size=128, num_samples=num_samples)
             # preprocess manual dataset
             synthetic_dataset, _, _ = self.preprocessor.preprocess(
                 train_data=synthetic_dataset,
